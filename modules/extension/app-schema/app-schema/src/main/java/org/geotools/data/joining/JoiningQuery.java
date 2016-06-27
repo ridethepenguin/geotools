@@ -18,11 +18,15 @@ package org.geotools.data.joining;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.geotools.data.Query;
 import org.opengis.filter.expression.Expression;
 import org.opengis.filter.sort.SortBy;
+import org.geotools.data.complex.FeatureTypeMapping;
+import org.geotools.data.complex.NestedMappings;
 
 /**
  * 
@@ -67,6 +71,7 @@ public class JoiningQuery extends Query {
     }
     
     protected List<QueryJoin> queryJoins;
+    protected NestedMappings nestedMappings;
     
     /*
      * True if the query shouldn't join to the table to find other rows with same id. This is in
@@ -85,6 +90,7 @@ public class JoiningQuery extends Query {
         setSubset(query.isSubset);
         isDenormalised = query.isDenormalised;
         ids = query.ids;
+        nestedMappings = query.nestedMappings;
     }
     
     public JoiningQuery(Query query){
@@ -135,4 +141,14 @@ public class JoiningQuery extends Query {
         this.isDenormalised = isDenormalised;
     }
 
+	public NestedMappings getNestedMappings() {
+		return nestedMappings;
+	}
+
+	public void setNestedMappings(NestedMappings nestedMappings) {
+		this.nestedMappings = nestedMappings;
+	}
+
+    
+    
 }

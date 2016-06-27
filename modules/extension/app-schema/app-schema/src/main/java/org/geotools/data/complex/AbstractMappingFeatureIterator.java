@@ -32,6 +32,7 @@ import org.geotools.data.Query;
 import org.geotools.data.complex.config.Types;
 import org.geotools.data.complex.filter.XPath;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
+import org.geotools.data.joining.JoiningQuery;
 import org.geotools.factory.CommonFactoryFinder;
 import org.geotools.factory.Hints;
 import org.geotools.feature.AppSchemaFeatureFactoryImpl;
@@ -216,6 +217,9 @@ public abstract class AbstractMappingFeatureIterator implements IMappingFeatureI
                 
         if (unrolledQuery==null) {
             unrolledQuery = getUnrolledQuery(query);
+            if(query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
+            	((JoiningQuery)unrolledQuery).setNestedMappings(((JoiningQuery)query).getNestedMappings());
+            }
         }       
         
          // NC - property names

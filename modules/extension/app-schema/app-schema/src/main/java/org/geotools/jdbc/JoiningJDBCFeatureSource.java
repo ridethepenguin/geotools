@@ -43,6 +43,7 @@ import org.geotools.factory.Hints;
 import org.geotools.feature.AttributeTypeBuilder;
 import org.geotools.feature.NameImpl;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
+import org.geotools.filter.FilterAttributeExtractor;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
 import org.geotools.filter.visitor.SimplifyingFilterVisitor;
 import org.geotools.jdbc.JDBCFeatureReader;
@@ -597,8 +598,14 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                              getDataStore().dialect.encodeColumnName(null, lastSortBy[i].getPropertyName().getPropertyName(), sortBySQL);
                              if (i < lastSortBy.length-1) sortBySQL.append(",");
                              sortBySQL.append(" FROM ");
-                             getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints());                                        
-                             sortBySQL.append(" ").append(toSQL.encodeToString(filter));
+                             getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints()); 
+                             if(isNestedFilter(filter)) {
+                            	 sortBySQL.append(" WHERE ").append(createNestedFilter(filter, toSQL, query));
+                             } else {
+                            	 sortBySQL.append(" ").append(toSQL.encodeToString(filter));
+                             }
+                             
+                             //sortBySQL.append(" ").append("WHERE EXISTS (SELECT \"gml_id\" FROM \"sipra\".\"t_denorm_sede\" WHERE \"sipra\".\"t_denorm_sede\".\"comune\" = 'Bagnasco' AND \"sipra\".\"t_denorm_sede\".\"id_istanza\" = \"sipra\".\"t_aua\".\"id_istanza\")");
                              sortBySQL.append(" ) ");
                              getDataStore().dialect.encodeTableName(TEMP_FILTER_ALIAS, sortBySQL);
                              sortBySQL.append(" ON ( ");
@@ -679,7 +686,26 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
         return sql.toString();
     }        
     
-    /**
+    private Object createNestedFilter(Filter filter, FilterToSQL toSQL,
+			JoiningQuery query) throws FilterToSQLException {
+    	
+    	NestedFilterToSQL nested = new NestedFilterToSQL(toSQL, query.getNestedMappings());
+    	nested.setInline(true);
+    	return nested.encodeToString(filter);  
+    	// return "WHERE EXISTS (SELECT \"gml_id\" FROM \"sipra\".\"t_denorm_sede\" WHERE \"sipra\".\"t_denorm_sede\".\"comune\" = 'Bagnasco' AND \"sipra\".\"t_denorm_sede\".\"id_istanza\" = \"sipra\".\"t_aua\".\"id_istanza\")";
+	}
+
+	private boolean isNestedFilter(Filter filter) {
+		FilterAttributeExtractor extractor = new FilterAttributeExtractor();
+		filter.accept(extractor, null);
+		for(String attribute : extractor.getAttributeNames()) {
+			if(attribute.indexOf("/") != -1)
+				return true;
+		}
+		return false;
+	}
+
+	/**
      * Apply paging. It's pretty straight forward except when the view is denormalised, because we don't know
      * how many rows would represent 1 feature.
      * @param query
@@ -739,8 +765,13 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                     getDataStore().encodeTableName(typeName, topIds, query.getHints());
                     // apply filter
                     if (filter != null) {
+                    	if(isNestedFilter(filter)) {
+                    		topIds.append(" WHERE ").append(createNestedFilter(filter, filterToSQL, query));
+                        } else {
+                        	topIds.append(" ").append(filterToSQL.encodeToString(filter));
+                        }
                         filterToSQL.setFieldEncoder(new JoiningFieldEncoder(typeName));
-                        topIds.append(" ").append(filterToSQL.encodeToString(filter));
+                        //topIds.append(" ").append(filterToSQL.encodeToString(filter));
                     }
                     topIds.append(" ORDER BY ");
                     topIds.append(sortSQL);

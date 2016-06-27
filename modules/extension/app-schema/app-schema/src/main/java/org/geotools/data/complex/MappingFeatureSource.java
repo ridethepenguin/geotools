@@ -125,6 +125,7 @@ public class MappingFeatureSource implements FeatureSource<FeatureType, Feature>
         namedQuery.setHints(query.getHints());
         if (query instanceof JoiningQuery) {
             ((JoiningQuery) namedQuery).setQueryJoins(((JoiningQuery) query).getQueryJoins());
+            ((JoiningQuery) namedQuery).setNestedMappings(((JoiningQuery) query).getNestedMappings());
         }
         return namedQuery;
     }

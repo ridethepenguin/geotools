@@ -87,8 +87,9 @@ public class NestedAttributeExpression extends AttributeExpressionImpl {
 
         // only simple/complex features are supported
         if (!(object instanceof Feature)) {
-            throw new UnsupportedOperationException(
-                    "Expecting a feature to apply filter, but found: " + object);
+            /*throw new UnsupportedOperationException(
+                    "Expecting a feature to apply filter, but found: " + object);*/
+        	return null;
         }
         
         return getValues(((Feature)object), rootMapping, fullSteps);

@@ -20,6 +20,7 @@ package org.geotools.data.complex.filter;
 import java.util.List;
 
 import org.geotools.data.complex.FeatureTypeMapping;
+import org.geotools.data.complex.NestedAttributeMapping;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
@@ -133,6 +134,11 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         }
         
         List<Expression> matchingMappings = mappings.findMappingsFor(exprSteps, false);
+        for(NestedAttributeMapping mapping :  mappings.getNestedMappings()) {
+        	if(exprSteps.startsWith(mapping.getTargetXPath())) {
+        		matchingMappings.add(mapping.getSourceExpression());
+        	}
+        }
 
         if (matchingMappings.isEmpty()) {
             postStack.push(expression);
