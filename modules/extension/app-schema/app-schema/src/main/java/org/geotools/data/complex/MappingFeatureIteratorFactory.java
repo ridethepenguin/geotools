@@ -144,19 +144,8 @@ public class MappingFeatureIteratorFactory {
                         ((JoiningQuery) query).addId(pn);
                     }
                 }
-                
-	            NestedMappings nestedMappings = new NestedMappings(mapping);
-	            // NC - joining nested atts
-	            for (AttributeMapping attMapping : mapping.getAttributeMappings()) {
-	
-	                if (attMapping instanceof JoiningNestedAttributeMapping) {
-	                	JoiningNestedAttributeMapping joiningMapping = (JoiningNestedAttributeMapping) attMapping;
-	                	FeatureTypeMapping ftm = joiningMapping.getNestedFeatureType();
-	                	nestedMappings.put(joiningMapping.getNestedFeatureTypeName(null).toString(), ftm);
-	                }
-	
-	            }
-	            ((JoiningQuery) query).setNestedMappings(nestedMappings);
+                ((JoiningQuery) query).setRootMapping(mapping);
+
             }
         }
         IMappingFeatureIterator iterator;
@@ -167,9 +156,8 @@ public class MappingFeatureIteratorFactory {
             Query unrolledQuery = store.unrollQuery(query, mapping);
             unrolledQuery.setFilter(unrolledFilter);
             if(query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
-            	((JoiningQuery)unrolledQuery).setNestedMappings(((JoiningQuery)query).getNestedMappings());
+            	 ((JoiningQuery)unrolledQuery).setRootMapping(((JoiningQuery)query).getRootMapping());
             }
-            
             if (isSimpleType(mapping)) {
                 iterator = new MappingAttributeIterator(store, mapping, query, unrolledQuery);
             } else {

@@ -275,6 +275,10 @@ public class FeatureTypeMapping {
                 candidates.add(mapping);
             }
         }
+        if (candidates.size() == 0 && propertyName.toString().equals("@gml:id") && getFeatureIdExpression() != null) {
+        	Expression idExpression = getFeatureIdExpression();
+        	candidates.add(new AttributeMapping(idExpression, idExpression, propertyName));
+        }
         List expressions = getExpressions(candidates, includeNestedMappings);        
 
         // Does the last step refer to a client property of the parent step?

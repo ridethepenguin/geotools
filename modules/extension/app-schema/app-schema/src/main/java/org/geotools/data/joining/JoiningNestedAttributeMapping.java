@@ -130,7 +130,8 @@ public class JoiningNestedAttributeMapping extends NestedAttributeMapping {
             List<PropertyName> selectedProperties, boolean includeMandatory, int resolveDepth, Integer resolveTimeOut) throws IOException {
         JoiningQuery query = new JoiningQuery();
         query.setCoordinateSystemReproject(reprojection);
-        query.setNestedMappings(((JoiningQuery)instance.baseTableQuery).getNestedMappings());
+        
+        query.setRootMapping(((JoiningQuery)instance.baseTableQuery).getRootMapping());
         FeatureTypeMapping fMapping = AppSchemaDataAccessRegistry.getMappingByName(featureTypeName);
 
         AttributeMapping mapping = fMapping
@@ -156,7 +157,7 @@ public class JoiningNestedAttributeMapping extends NestedAttributeMapping {
         join.setSortBy(instance.baseTableQuery.getSortBy()); // incorporate order 
         // pass on paging from the parent table to the same query within this join
         join.setMaxFeatures(instance.baseTableQuery.getMaxFeatures());
-        join.setNestedMappings(((JoiningQuery)instance.baseTableQuery).getNestedMappings());
+        join.setRootMapping(((JoiningQuery)instance.baseTableQuery).getRootMapping());
         join.setStartIndex(instance.baseTableQuery.getStartIndex());
         FilterAttributeExtractor extractor = new FilterAttributeExtractor();
         instance.mapping.getFeatureIdExpression().accept(extractor, null);

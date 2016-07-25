@@ -424,7 +424,7 @@ public class PostPreProcessFilterSplittingVisitor implements FilterVisitor, Expr
             return null;
         }
         
-	    private void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
+	    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
 	        if( original==null )
 	        	original=filter;
 

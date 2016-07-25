@@ -24,6 +24,7 @@ import org.geotools.data.complex.NestedAttributeMapping;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
+import org.opengis.filter.BinaryComparisonOperator;
 import org.opengis.filter.Id;
 import org.opengis.filter.expression.Add;
 import org.opengis.filter.expression.BinaryExpression;
@@ -43,10 +44,13 @@ import org.opengis.filter.expression.Subtract;
  * @source $URL$
  */
 public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor {
-    
+	private int nestedAttributes = 0; 
+	
     public class CapabilitiesExpressionVisitor implements ExpressionVisitor {
         
         protected boolean capable = true;
+        
+        
         
         public boolean isCapable(){
             return capable;
@@ -123,6 +127,17 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         return null;
     }
     
+    @Override
+    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
+    	nestedAttributes = 0;
+    	int i = preStack.size();
+    	super.visitBinaryComparisonOperator(filter);
+    	if(nestedAttributes > 1 && preStack.size() == i+1) {
+    		Object o = preStack.pop();
+    		postStack.push(o);
+    	}
+    }
+    
     public Object visit(PropertyName expression, Object notUsed) {
         
         // break into single steps
@@ -136,6 +151,7 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         List<Expression> matchingMappings = mappings.findMappingsFor(exprSteps, false);
         for(NestedAttributeMapping mapping :  mappings.getNestedMappings()) {
         	if(exprSteps.startsWith(mapping.getTargetXPath())) {
+        		nestedAttributes++;
         		matchingMappings.add(mapping.getSourceExpression());
         	}
         }

@@ -376,7 +376,8 @@ public class AppSchemaDataAccess implements DataAccess<FeatureType, Feature> {
             List<SortBy> sort = new ArrayList<SortBy>();
             if (query.getSortBy() != null) {
                 for (SortBy sortBy : query.getSortBy()) {
-                    for (Expression expr : unrollProperty(sortBy.getPropertyName(), mapping)) {
+                	List<Expression> expressions = unrollProperty(sortBy.getPropertyName(), mapping);
+                    for (Expression expr : expressions) {
                         if (expr != null) {
                             FilterAttributeExtractor extractor = new FilterAttributeExtractor();
                             expr.accept(extractor, null);
@@ -385,7 +386,13 @@ public class AppSchemaDataAccess implements DataAccess<FeatureType, Feature> {
                                 sort.add(new SortByImpl(filterFac.property(att), sortBy.getSortOrder()));
                             }
                         }
-                    }  
+                    }
+                    /*
+                     * 
+                     * TODO: support nested attributes for sortby
+                     * if(expressions.size() == 0) {
+                    	sort.add(new SortByImpl(sortBy.getPropertyName(), sortBy.getSortOrder()));
+                    }*/
                 }
             }
 

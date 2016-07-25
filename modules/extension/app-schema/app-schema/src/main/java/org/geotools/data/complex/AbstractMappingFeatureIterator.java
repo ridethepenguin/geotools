@@ -218,7 +218,7 @@ public abstract class AbstractMappingFeatureIterator implements IMappingFeatureI
         if (unrolledQuery==null) {
             unrolledQuery = getUnrolledQuery(query);
             if(query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
-            	((JoiningQuery)unrolledQuery).setNestedMappings(((JoiningQuery)query).getNestedMappings());
+            	 ((JoiningQuery)unrolledQuery).setRootMapping(((JoiningQuery)query).getRootMapping());
             }
         }       
         
