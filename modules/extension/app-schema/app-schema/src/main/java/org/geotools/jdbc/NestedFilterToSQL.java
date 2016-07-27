@@ -75,17 +75,19 @@ import org.opengis.filter.temporal.TEquals;
 import org.opengis.filter.temporal.TOverlaps;
 
 public class NestedFilterToSQL extends FilterToSQL {
-	FeatureTypeMapping rootMapping;
-	FilterToSQL original;
+    FeatureTypeMapping rootMapping;
 
-	public NestedFilterToSQL(FeatureTypeMapping rootMapping, FilterToSQL original) {
-		super();
-		this.rootMapping = rootMapping;
-		this.original = original;
-	}
-	
-	public void encode(Filter filter) throws FilterToSQLException {
-        if (out == null) throw new FilterToSQLException("Can't encode to a null writer.");
+    FilterToSQL original;
+
+    public NestedFilterToSQL(FeatureTypeMapping rootMapping, FilterToSQL original) {
+        super();
+        this.rootMapping = rootMapping;
+        this.original = original;
+    }
+
+    public void encode(Filter filter) throws FilterToSQLException {
+        if (out == null)
+            throw new FilterToSQLException("Can't encode to a null writer.");
         original.setWriter(out);
         if (original.getCapabilities().fullySupports(filter)) {
 
@@ -96,7 +98,7 @@ public class NestedFilterToSQL extends FilterToSQL {
 
                 filter.accept(this, null);
 
-                //out.write(";");
+                // out.write(";");
             } catch (java.io.IOException ioe) {
                 throw new FilterToSQLException("Problem writing filter: ", ioe);
             }
@@ -104,269 +106,275 @@ public class NestedFilterToSQL extends FilterToSQL {
             throw new FilterToSQLException("Filter type not supported");
         }
     }
-	
-	protected class NestedFieldEncoder implements FilterToSQL.FieldEncoder {
-        
+
+    protected class NestedFieldEncoder implements FilterToSQL.FieldEncoder {
+
         private String tableName;
+
         private JDBCDataStore store;
-        
+
         public NestedFieldEncoder(String tableName, JDBCDataStore store) {
             this.tableName = tableName;
             this.store = store;
         }
-        
+
         public String encode(String s) {
-           StringBuffer buf = new StringBuffer();
-           try {
-			store.encodeTableName(tableName, buf, null);
-           } catch (SQLException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-           }           
-           buf.append(".");
-           buf.append(s);
-           return buf.toString();
+            StringBuffer buf = new StringBuffer();
+            try {
+                store.encodeTableName(tableName, buf, null);
+            } catch (SQLException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+            buf.append(".");
+            buf.append(s);
+            return buf.toString();
         }
     }
-	
-	protected Object visitBinaryComparison(Filter filter, Object extraData, String xpath) {
-		try {
 
-	        
-			out.write("EXISTS (");
-			
-			
-			List<AttributeMapping> mappings = new ArrayList<AttributeMapping>();
-			List<AttributeMapping> rootAttributes = rootMapping.getAttributeMappings();
-			
-			List<AttributeMapping> currentAttributes = rootAttributes;
-			String currentXPath = xpath;
-			FeatureTypeMapping currentTypeMapping = rootMapping;
-			boolean found = true;
-			while (currentXPath.indexOf("/") != -1 && found) {
-				found = false;
-				int pos = 0;
-				AttributeMapping currentAttribute = null;
-				for(AttributeMapping attributeMapping : currentAttributes) {
-					String targetXPath = attributeMapping.getTargetXPath().toString();
-					if(currentXPath.startsWith(targetXPath)) {
-						if(attributeMapping instanceof JoiningNestedAttributeMapping) {
-							String nestedFeatureType = ((JoiningNestedAttributeMapping)attributeMapping).getNestedFeatureTypeName(null).toString();
-							 
-							if(currentXPath.startsWith(targetXPath + "/" + nestedFeatureType)) {
-								pos += targetXPath.length() + nestedFeatureType.length() + 2;
-								currentAttribute = attributeMapping;
-								found = true;
-							}
-						}
-					}
+    protected Object visitBinaryComparison(Filter filter, Object extraData, String xpath) {
+        try {
 
-				}
-				if(currentAttribute != null) {
-					mappings.add(currentAttribute);
-					currentTypeMapping = ((JoiningNestedAttributeMapping)currentAttribute).getNestedFeatureType();
-				}
-				currentXPath = currentXPath.substring(pos);
-				currentAttributes = currentTypeMapping.getAttributeMappings();
-			}
-			
-			
-			SimpleFeatureType lastType = (SimpleFeatureType)currentTypeMapping.getSource().getSchema();
-			JDBCDataStore store = (JDBCDataStore)currentTypeMapping.getSource().getDataStore();
-			
-			StringBuffer sql = encodeSelectKeyFrom(lastType, store);
-	        for(int i = 0; i < mappings.size() - 1; i++) {
-	        	JoiningNestedAttributeMapping leftJoin = (JoiningNestedAttributeMapping)mappings.get(i);
-	        	String leftTableName = leftJoin.getNestedFeatureType().getSource().getSchema().getName().getLocalPart();
-	        	JoiningNestedAttributeMapping rightJoin = (JoiningNestedAttributeMapping)mappings.get(i + 1);
-	        	String rightTableName = rightJoin.getNestedFeatureType().getSource().getSchema().getName().getLocalPart();
-	        	sql.append(" INNER JOIN ");
-	        	
-				store.encodeTableName(leftTableName, sql, null);
-	        	sql.append(" ON ");
-	        	encodeColumnName(store, rightJoin.getSourceExpression().toString(), leftTableName, sql, null);
-	        	sql.append(" = ");
-	        	encodeColumnName(store, rightJoin.getMapping(rightJoin.getNestedFeatureType()).getSourceExpression().toString(), rightTableName, sql, null);
-	        }
-	        if(!currentXPath.equals("")) {
-	        	createWhereClause(filter, xpath, currentXPath,
-						currentTypeMapping, lastType, store, sql);
-	        	
-	        	JoiningNestedAttributeMapping firstJoin = (JoiningNestedAttributeMapping)mappings.get(0);
-	        	
-	        	sql.append(" AND ");
-	        	encodeColumnName(store, firstJoin.getSourceExpression().toString(), rootMapping.getSource().getSchema().getName().getLocalPart(), sql, null);
-	        	sql.append(" = ");
-	        	encodeColumnName(store, firstJoin.getMapping(firstJoin.getNestedFeatureType()).getSourceExpression().toString() , firstJoin.getNestedFeatureType().getSource().getSchema().getName().getLocalPart(), sql, null);
-			}
-	        out.write(sql.toString());
-	        out.write(")");
-	        return extraData;
-			
-		} catch (java.io.IOException ioe) {
+            out.write("EXISTS (");
+
+            List<AttributeMapping> mappings = new ArrayList<AttributeMapping>();
+            List<AttributeMapping> rootAttributes = rootMapping.getAttributeMappings();
+
+            List<AttributeMapping> currentAttributes = rootAttributes;
+            String currentXPath = xpath;
+            FeatureTypeMapping currentTypeMapping = rootMapping;
+            boolean found = true;
+            while (currentXPath.indexOf("/") != -1 && found) {
+                found = false;
+                int pos = 0;
+                AttributeMapping currentAttribute = null;
+                for (AttributeMapping attributeMapping : currentAttributes) {
+                    String targetXPath = attributeMapping.getTargetXPath().toString();
+                    if (currentXPath.startsWith(targetXPath)) {
+                        if (attributeMapping instanceof JoiningNestedAttributeMapping) {
+                            String nestedFeatureType = ((JoiningNestedAttributeMapping) attributeMapping)
+                                    .getNestedFeatureTypeName(null).toString();
+
+                            if (currentXPath.startsWith(targetXPath + "/" + nestedFeatureType)) {
+                                pos += targetXPath.length() + nestedFeatureType.length() + 2;
+                                currentAttribute = attributeMapping;
+                                found = true;
+                            }
+                        }
+                    }
+
+                }
+                if (currentAttribute != null) {
+                    mappings.add(currentAttribute);
+                    currentTypeMapping = ((JoiningNestedAttributeMapping) currentAttribute)
+                            .getNestedFeatureType();
+                }
+                currentXPath = currentXPath.substring(pos);
+                currentAttributes = currentTypeMapping.getAttributeMappings();
+            }
+
+            SimpleFeatureType lastType = (SimpleFeatureType) currentTypeMapping.getSource()
+                    .getSchema();
+            JDBCDataStore store = (JDBCDataStore) currentTypeMapping.getSource().getDataStore();
+
+            StringBuffer sql = encodeSelectKeyFrom(lastType, store);
+            for (int i = 0; i < mappings.size() - 1; i++) {
+                JoiningNestedAttributeMapping leftJoin = (JoiningNestedAttributeMapping) mappings
+                        .get(i);
+                String leftTableName = leftJoin.getNestedFeatureType().getSource().getSchema()
+                        .getName().getLocalPart();
+                JoiningNestedAttributeMapping rightJoin = (JoiningNestedAttributeMapping) mappings
+                        .get(i + 1);
+                String rightTableName = rightJoin.getNestedFeatureType().getSource().getSchema()
+                        .getName().getLocalPart();
+                sql.append(" INNER JOIN ");
+
+                store.encodeTableName(leftTableName, sql, null);
+                sql.append(" ON ");
+                encodeColumnName(store, rightJoin.getSourceExpression().toString(), leftTableName,
+                        sql, null);
+                sql.append(" = ");
+                encodeColumnName(store, rightJoin.getMapping(rightJoin.getNestedFeatureType())
+                        .getSourceExpression().toString(), rightTableName, sql, null);
+            }
+            if (!currentXPath.equals("")) {
+                createWhereClause(filter, xpath, currentXPath, currentTypeMapping, lastType, store,
+                        sql);
+
+                JoiningNestedAttributeMapping firstJoin = (JoiningNestedAttributeMapping) mappings
+                        .get(0);
+
+                sql.append(" AND ");
+                encodeColumnName(store, firstJoin.getSourceExpression().toString(), rootMapping
+                        .getSource().getSchema().getName().getLocalPart(), sql, null);
+                sql.append(" = ");
+                encodeColumnName(store, firstJoin.getMapping(firstJoin.getNestedFeatureType())
+                        .getSourceExpression().toString(), firstJoin.getNestedFeatureType()
+                        .getSource().getSchema().getName().getLocalPart(), sql, null);
+            }
+            out.write(sql.toString());
+            out.write(")");
+            return extraData;
+
+        } catch (java.io.IOException ioe) {
             throw new RuntimeException("Problem writing filter: ", ioe);
         } catch (SQLException e) {
-        	throw new RuntimeException("Problem writing filter: ", e);
-		} catch (FilterToSQLException e) {
-			throw new RuntimeException("Problem writing filter: ", e);
-		}
-	}
-	
-	@Override
-	public Object visit(PropertyIsEqualTo filter, Object extraData) {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-		
-	}
+            throw new RuntimeException("Problem writing filter: ", e);
+        } catch (FilterToSQLException e) {
+            throw new RuntimeException("Problem writing filter: ", e);
+        }
+    }
 
-	private boolean hasNestedAttributes(String[] xpaths) {
-		for(String xpath : xpaths) {
-			if(xpath.indexOf("/") != -1) {
-				return true;
-			}
-		}
-		return false;
-	}
+    @Override
+    public Object visit(PropertyIsEqualTo filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
 
-	private String[] getAttributesXPath(Filter filter) {
-		FilterAttributeExtractor extractor = new FilterAttributeExtractor();
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+
+    }
+
+    private boolean hasNestedAttributes(String[] xpaths) {
+        for (String xpath : xpaths) {
+            if (xpath.indexOf("/") != -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String[] getAttributesXPath(Filter filter) {
+        FilterAttributeExtractor extractor = new FilterAttributeExtractor();
         filter.accept(extractor, null);
-		return extractor.getAttributeNames();
-	}
+        return extractor.getAttributeNames();
+    }
 
-	
-	
-	@Override
-	public Object visit(PropertyIsBetween filter, Object extraData)
-			throws RuntimeException {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsBetween filter, Object extraData) throws RuntimeException {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(PropertyIsLike filter, Object extraData) {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsLike filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(PropertyIsGreaterThanOrEqualTo filter, Object extraData) {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsGreaterThanOrEqualTo filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(PropertyIsGreaterThan filter, Object extraData) {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsGreaterThan filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(PropertyIsLessThan filter, Object extraData) {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsLessThan filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(PropertyIsLessThanOrEqualTo filter, Object extraData) {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsLessThanOrEqualTo filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(PropertyIsNotEqualTo filter, Object extraData) {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsNotEqualTo filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(PropertyIsNull filter, Object extraData)
-			throws RuntimeException {
-		String[] xpath = getAttributesXPath(filter);
-		if(!hasNestedAttributes(xpath)) {
-			return original.visit(filter, extraData);
-		}
-		return visitBinaryComparison(filter, extraData, xpath[0]);
-	}
+    @Override
+    public Object visit(PropertyIsNull filter, Object extraData) throws RuntimeException {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
 
-	@Override
-	public Object visit(Id filter, Object extraData) {
-		return original.visit(filter, extraData);
-	}
+    @Override
+    public Object visit(Id filter, Object extraData) {
+        return original.visit(filter, extraData);
+    }
 
-	private void createWhereClause(Filter filter, String filterProperty,
-			String newFilterProperty, FeatureTypeMapping currentTypeMapping,
-			SimpleFeatureType lastType, JDBCDataStore store, StringBuffer sql)
-			throws FilterToSQLException {
+    private void createWhereClause(Filter filter, String filterProperty, String newFilterProperty,
+            FeatureTypeMapping currentTypeMapping, SimpleFeatureType lastType, JDBCDataStore store,
+            StringBuffer sql) throws FilterToSQLException {
 
-		NestedToSimpleFilterVisitor duplicate = new NestedToSimpleFilterVisitor(filterProperty, newFilterProperty);
-		
-		Filter duplicated = (Filter)filter.accept(duplicate, null);
-		Filter unrolled = AppSchemaDataAccess.unrollFilter(duplicated, currentTypeMapping);
-		NestedFieldEncoder fieldEncoder = new NestedFieldEncoder(lastType.getTypeName(), store);
-		FilterToSQL nestedFilterToSQL = store.createFilterToSQL(lastType);
-		nestedFilterToSQL.setFieldEncoder(fieldEncoder);
-		sql.append(" ").append(nestedFilterToSQL.encodeToString(unrolled));
-	}
+        NestedToSimpleFilterVisitor duplicate = new NestedToSimpleFilterVisitor(filterProperty,
+                newFilterProperty);
 
-	private StringBuffer encodeSelectKeyFrom(SimpleFeatureType lastType,
-			JDBCDataStore store) throws SQLException {
-		// primary key
-		PrimaryKey key = null;
+        Filter duplicated = (Filter) filter.accept(duplicate, null);
+        Filter unrolled = AppSchemaDataAccess.unrollFilter(duplicated, currentTypeMapping);
+        NestedFieldEncoder fieldEncoder = new NestedFieldEncoder(lastType.getTypeName(), store);
+        FilterToSQL nestedFilterToSQL = store.createFilterToSQL(lastType);
+        nestedFilterToSQL.setFieldEncoder(fieldEncoder);
+        sql.append(" ").append(nestedFilterToSQL.encodeToString(unrolled));
+    }
 
-		try {
-		    key = store.getPrimaryKey(lastType);
-		} catch (IOException e) {
-		    throw new RuntimeException(e);
-		}
-		StringBuffer sql = new StringBuffer();
-		sql.append("SELECT ");
-		StringBuffer sqlKeys = new StringBuffer();
-		String colName;
-		for ( PrimaryKeyColumn col : key.getColumns() ) {
-		    colName = col.getName();
-		    sqlKeys.append(",");
-		    encodeColumnName(store, colName, lastType.getTypeName(), sqlKeys, null);
-		    
-		}
-		sql.append(sqlKeys.substring(1));
-		sql.append(" FROM ");
-		store.encodeTableName(lastType.getTypeName(), sql, null);
-		return sql;
-	}
+    private StringBuffer encodeSelectKeyFrom(SimpleFeatureType lastType, JDBCDataStore store)
+            throws SQLException {
+        // primary key
+        PrimaryKey key = null;
 
+        try {
+            key = store.getPrimaryKey(lastType);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        StringBuffer sql = new StringBuffer();
+        sql.append("SELECT ");
+        StringBuffer sqlKeys = new StringBuffer();
+        String colName;
+        for (PrimaryKeyColumn col : key.getColumns()) {
+            colName = col.getName();
+            sqlKeys.append(",");
+            encodeColumnName(store, colName, lastType.getTypeName(), sqlKeys, null);
 
+        }
+        sql.append(sqlKeys.substring(1));
+        sql.append(" FROM ");
+        store.encodeTableName(lastType.getTypeName(), sql, null);
+        return sql;
+    }
 
-	public void encodeColumnName(JDBCDataStore store, String colName, String typeName, StringBuffer sql, Hints hints) throws SQLException{
-        
-        store.encodeTableName(typeName, sql, hints);                
+    public void encodeColumnName(JDBCDataStore store, String colName, String typeName,
+            StringBuffer sql, Hints hints) throws SQLException {
+
+        store.encodeTableName(typeName, sql, hints);
         sql.append(".");
         store.dialect.encodeColumnName(colName, sql);
-        
-    }	
+
+    }
 }
