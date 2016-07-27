@@ -550,9 +550,9 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                 if (!query.isSubset()) {
                     // grab the full feature type, as we might be encoding a filter
                     // that uses attributes that aren't returned in the results
-                    lastSortBy = query.getQueryJoins() == null || query.getQueryJoins().size() == 0 ? query
+                    lastSortBy = isRootFeature ? query.getSortBy() : (query.getQueryJoins() == null || query.getQueryJoins().size() == 0 ? query
                             .getSortBy() : query.getQueryJoins()
-                            .get(query.getQueryJoins().size() - 1).getSortBy();
+                            .get(query.getQueryJoins().size() - 1).getSortBy());
                 }
                 String lastTableName = isRootFeature ? query.getTypeName() :
                     query.getQueryJoins().get(query.getQueryJoins().size()-1).getJoiningTypeName();
