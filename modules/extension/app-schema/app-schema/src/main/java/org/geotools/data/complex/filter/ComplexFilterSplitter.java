@@ -21,6 +21,7 @@ import java.util.List;
 
 import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.NestedAttributeMapping;
+import org.geotools.data.complex.filter.NestedMappingsExtractor.MappingStepList;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
@@ -129,13 +130,13 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
     
     @Override
     protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
-    	nestedAttributes = 0;
-    	int i = preStack.size();
-    	super.visitBinaryComparisonOperator(filter);
-    	if(nestedAttributes > 1 && preStack.size() == i+1) {
-    		Object o = preStack.pop();
-    		postStack.push(o);
-    	}
+        nestedAttributes = 0;
+        int i = preStack.size();
+        super.visitBinaryComparisonOperator(filter);
+        if (nestedAttributes > 1 && preStack.size() == i + 1) {
+            Object o = preStack.pop();
+            postStack.push(o);
+        }
     }
     
     public Object visit(PropertyName expression, Object notUsed) {
@@ -147,13 +148,19 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
             postStack.push(expression);
             return null;
         }
-        
+
         List<Expression> matchingMappings = mappings.findMappingsFor(exprSteps, false);
-        for(NestedAttributeMapping mapping :  mappings.getNestedMappings()) {
-        	if(exprSteps.startsWith(mapping.getTargetXPath())) {
-        		nestedAttributes++;
-        		matchingMappings.add(mapping.getSourceExpression());
-        	}
+        for (NestedAttributeMapping mapping : mappings.getNestedMappings()) {
+            if (exprSteps.startsWith(mapping.getTargetXPath())) {
+                // verify that the feature chain can be known a priori
+                NestedMappingsExtractor nestedMappingsExtractor = new NestedMappingsExtractor(mappings);
+                nestedMappingsExtractor.visit(expression, null);
+                MappingStepList mappingSteps = nestedMappingsExtractor.getMappingSteps();
+                if (mappingSteps.size() > 0 && mappingSteps.isJoiningEnabled()) {
+                    nestedAttributes++;
+                    matchingMappings.add(mapping.getSourceExpression());
+                }
+            }
         }
 
         if (matchingMappings.isEmpty()) {
