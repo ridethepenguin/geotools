@@ -13,6 +13,7 @@ import org.geotools.data.joining.JoiningNestedAttributeMapping;
 import org.geotools.feature.type.Types;
 import org.geotools.filter.visitor.DefaultExpressionVisitor;
 import org.geotools.util.logging.Logging;
+import org.geotools.xlink.XLINK;
 import org.opengis.feature.Feature;
 import org.opengis.feature.type.Name;
 import org.opengis.filter.expression.Expression;
@@ -122,7 +123,32 @@ public class NestedMappingsExtractor extends DefaultExpressionVisitor {
                     currentType.getNamespaces());
             List<Expression> lastAttrExpressions = currentType.findMappingsFor(lastAttrPath, false);
             if (lastAttrExpressions != null && lastAttrExpressions.size() > 0) {
-                mappingSteps.addStep(new MappingStep(currentType, currentXPath));
+                if (isClientProperty(lastAttrPath) && isXlinkHref(lastAttrPath)) {
+                    // check whether this is a case of feature chaining by reference
+                    StepList parentAttrPath = lastAttrPath.subList(0, lastAttrPath.size() - 1);
+                    AttributeMapping parentAttr = currentType.getAttributeMapping(parentAttrPath);
+                    if (parentAttr != null && parentAttr instanceof NestedAttributeMapping) {
+                        // yes, it's feature chaining by reference: add another step to the chain
+                        NestedAttributeMapping nestedAttr = (NestedAttributeMapping) parentAttr;
+                        mappingSteps.addStep(new MappingStep(currentType, nestedAttr));
+                        // add last step
+                        if (nestedAttr.isConditional() && feature == null) {
+                            LOGGER.fine("Conditional nested mapping found, but no feature to evaluate "
+                                    + "against was provided: nested feature type cannot be determined");
+                            mappingSteps.clear();
+                        } else {
+                            FeatureTypeMapping nestedType = nestedAttr.getFeatureTypeMapping(feature);
+                            if (nestedType != null) {
+                                mappingSteps
+                                        .addStep(new MappingStep(nestedType, currentXPath, true));
+                            } else {
+                                LOGGER.fine("Nested feature type could not be determined");
+                            }
+                        }
+                    }
+                } else {
+                    mappingSteps.addStep(new MappingStep(currentType, currentXPath));
+                }
             }
         }
     }
@@ -141,6 +167,23 @@ public class NestedMappingsExtractor extends DefaultExpressionVisitor {
         LOGGER.warning("No prefix found for namespace URI: " + featureTypeName.getNamespaceURI());
 
         return featureTypeName.getLocalPart();
+    }
+
+    private boolean isClientProperty(StepList steps) {
+        if (steps.isEmpty()) {
+            return false;
+        }
+        return steps.get(steps.size() - 1).isXmlAttribute();
+    }
+
+    private boolean isXlinkHref(StepList steps) {
+        if (steps.isEmpty()) {
+            return false;
+        }
+        // special case for xlink:href by feature chaining
+        // must get the value from the nested attribute mapping instead, i.e. from another table
+        // if it's to get the values from the local table, it shouldn't be set with feature chaining
+        return steps.get(steps.size() - 1).getName().equals(XLINK.HREF);
     }
 
     /**
@@ -174,6 +217,14 @@ public class NestedMappingsExtractor extends DefaultExpressionVisitor {
                 throw new NullPointerException("mappingStep is null");
             }
             mappingSteps.add(mappingStep);
+            int size = mappingSteps.size();
+            String alias = (size == 1) ? "_chain_root" : "_chain_link_" + (size - 1);
+            mappingStep.setAlias(alias);
+            if (size > 1) {
+                MappingStep previousStep = mappingSteps.get(size-2);
+                previousStep.nextStep = mappingStep;
+                mappingStep.previousStep = previousStep;
+            }
         }
 
         public MappingStep getStep(int stepIdx) {
@@ -197,7 +248,7 @@ public class NestedMappingsExtractor extends DefaultExpressionVisitor {
             if (mappingSteps.size() == 0) {
                 throw new IndexOutOfBoundsException("the list is empty");
             }
-            return mappingSteps.get(mappingSteps.size()-1);
+            return mappingSteps.get(mappingSteps.size() - 1);
         }
 
         public boolean isJoiningEnabled() {
@@ -235,29 +286,48 @@ public class NestedMappingsExtractor extends DefaultExpressionVisitor {
 
         private String ownAttributeXPath;
 
-        public MappingStep(FeatureTypeMapping featureType,
-                NestedAttributeMapping nestedFeatureAttribute) {
-            if (featureType == null) {
-                throw new NullPointerException("featureType is null");
-            }
-            if (nestedFeatureAttribute == null) {
-                throw new NullPointerException("nestedFeatureAttribute is null");
-            }
-            this.featureTypeMapping = featureType;
-            this.nestedFeatureAttribute = nestedFeatureAttribute;
-            this.ownAttributeXPath = null;
-        }
+        private boolean chainingByReference;
 
-        public MappingStep(FeatureTypeMapping featureType, String ownAttributeXPath) {
+        private String alias;
+
+        private MappingStep nextStep;
+
+        private MappingStep previousStep;
+
+        private MappingStep(FeatureTypeMapping featureType) {
             if (featureType == null) {
                 throw new NullPointerException("featureType is null");
-            }
-            if (ownAttributeXPath == null || ownAttributeXPath.trim().isEmpty()) {
-                throw new IllegalArgumentException("ownAttributeXPath must not be null or empty");
             }
             this.featureTypeMapping = featureType;
             this.nestedFeatureAttribute = null;
+            this.ownAttributeXPath = null;
+            this.chainingByReference = false;
+            this.alias = featureType.getSource().getSchema().getName().getLocalPart();
+            this.nextStep = null;
+            this.previousStep = null;
+        }
+
+        public MappingStep(FeatureTypeMapping featureType,
+                NestedAttributeMapping nestedFeatureAttribute) {
+            this(featureType);
+            if (nestedFeatureAttribute == null) {
+                throw new NullPointerException("nestedFeatureAttribute is null");
+            }
+            this.nestedFeatureAttribute = nestedFeatureAttribute;
+        }
+
+        public MappingStep(FeatureTypeMapping featureType, String ownAttributeXPath) {
+            this(featureType);
+            if (ownAttributeXPath == null || ownAttributeXPath.trim().isEmpty()) {
+                throw new IllegalArgumentException("ownAttributeXPath must not be null or empty");
+            }
             this.ownAttributeXPath = ownAttributeXPath;
+        }
+
+        public MappingStep(FeatureTypeMapping featureType, String ownAttributeXPath,
+                boolean chainingByReference) {
+            this(featureType, ownAttributeXPath);
+            this.chainingByReference = chainingByReference;
         }
 
         public FeatureTypeMapping getFeatureTypeMapping() {
@@ -277,6 +347,10 @@ public class NestedMappingsExtractor extends DefaultExpressionVisitor {
             return attributeMappingClass.cast(nestedFeatureAttribute);
         }
 
+        public boolean isChainingByReference() {
+            return chainingByReference;
+        }
+
         public boolean isJoiningNestedMapping() {
             return nestedFeatureAttribute != null
                     && nestedFeatureAttribute instanceof JoiningNestedAttributeMapping;
@@ -290,5 +364,20 @@ public class NestedMappingsExtractor extends DefaultExpressionVisitor {
             return ownAttributeXPath != null && !ownAttributeXPath.trim().isEmpty();
         }
 
+        public String getAlias() {
+            return alias;
+        }
+
+        void setAlias(String alias) {
+            this.alias = alias;
+        }
+
+        public MappingStep next() {
+            return nextStep;
+        }
+
+        public MappingStep previous() {
+            return previousStep;
+        }
     }
 }

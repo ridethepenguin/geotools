@@ -33,6 +33,7 @@ import org.geotools.data.complex.filter.XPathUtil.Step;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.data.joining.JoiningNestedAttributeMapping;
 import org.geotools.gml3.GML;
+import org.geotools.xlink.XLINK;
 import org.opengis.feature.Feature;
 import org.opengis.feature.type.AttributeDescriptor;
 import org.opengis.feature.type.FeatureType;
@@ -327,9 +328,12 @@ public class FeatureTypeMapping {
         Expression propertyExpression;
         for (Iterator it = attributeMappings.iterator(); it.hasNext();) {
             attMapping = (AttributeMapping) it.next();
-            if (attMapping instanceof JoiningNestedAttributeMapping) {
+            if (attMapping instanceof JoiningNestedAttributeMapping
+                    && !Types.equals(clientPropertyName, XLINK.HREF)) {
                 // if it's joining for simple content feature chaining it has to be empty
-                // so it will be added to the post filter
+                // so it will be added to the post filter... unless this is feature chaining by reference
+                // and we are looking at the xlink:href property, whose source expression is specified
+                // in the nested attribute mapping of the parent feature
                 clientPropertyExpressions.add(null);
             } else {
                 clientProperties = attMapping.getClientProperties();

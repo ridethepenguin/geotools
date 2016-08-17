@@ -6,6 +6,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.sql.SQLException;
+import java.util.List;
 
 import net.sf.cglib.proxy.MethodInterceptor;
 import net.sf.cglib.proxy.MethodProxy;
@@ -14,21 +15,29 @@ import org.geotools.data.complex.AppSchemaDataAccess;
 import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.NestedAttributeMapping;
 import org.geotools.data.complex.filter.NestedMappingsExtractor;
+import org.geotools.data.complex.filter.XPath;
 import org.geotools.data.complex.filter.NestedMappingsExtractor.MappingStep;
 import org.geotools.data.complex.filter.NestedMappingsExtractor.MappingStepList;
+import org.geotools.data.complex.filter.XPathUtil.StepList;
+import org.geotools.data.complex.filter.UnmappingFilterVisitor;
 import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.data.jdbc.FilterToSQLException;
 import org.geotools.factory.Hints;
 import org.geotools.filter.FilterAttributeExtractor;
 import org.geotools.filter.FilterFactoryImplNamespaceAware;
+import org.geotools.filter.NestedAttributeExpression;
 import org.geotools.jdbc.JoiningJDBCFeatureSource.JoiningFieldEncoder;
 import org.opengis.feature.simple.SimpleFeatureType;
+import org.opengis.feature.type.AttributeDescriptor;
 import org.opengis.filter.BinaryComparisonOperator;
 import org.opengis.filter.Filter;
 import org.opengis.filter.FilterFactory;
 import org.opengis.filter.PropertyIsBetween;
 import org.opengis.filter.PropertyIsLike;
 import org.opengis.filter.PropertyIsNull;
+import org.opengis.filter.expression.Expression;
+import org.opengis.filter.expression.PropertyName;
+import org.xml.sax.helpers.NamespaceSupport;
 
 public class NestedFilterToSQLProxy implements MethodInterceptor {
     FeatureTypeMapping rootMapping;
@@ -89,32 +98,28 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
                 out.write("EXISTS (");
 
                 MappingStep lastMappingStep = mappingSteps.getLastStep();
-                FeatureTypeMapping lastTypeMapping = lastMappingStep.getFeatureTypeMapping();
-                SimpleFeatureType lastSourceType = (SimpleFeatureType) lastTypeMapping.getSource()
-                        .getSchema();
-                JDBCDataStore store = (JDBCDataStore) lastTypeMapping.getSource().getDataStore();
-
-                StringBuffer sql = encodeSelectKeyFrom(lastSourceType, store);
+                StringBuffer sql = encodeSelectKeyFrom(lastMappingStep);
 
                 for (int i = numMappings - 2; i > 0; i--) {
                     MappingStep mappingStep = mappingSteps.getStep(i);
                     if (mappingStep.hasNestedFeature()) {
                         FeatureTypeMapping parentFeature = mappingStep.getFeatureTypeMapping();
+                        JDBCDataStore store = (JDBCDataStore) parentFeature.getSource()
+                                .getDataStore();
                         String parentTableName = parentFeature.getSource().getSchema().getName()
                                 .getLocalPart();
 
                         sql.append(" INNER JOIN ");
                         store.encodeTableName(parentTableName, sql, null);
+                        sql.append(" AS ");
+                        store.dialect.encodeTableName(mappingStep.getAlias(), sql);
                         sql.append(" ON ");
-                        encodeJoinCondition(mappingStep, sql, store);
+                        encodeJoinCondition(mappingSteps, i, sql);
                     }
                 }
 
                 if (lastMappingStep.hasOwnAttribute()) {
-                    String lastAttrXPath = lastMappingStep.getOwnAttributeXPath();
-                    // TODO: investigate why table names are not schema-qualified in where clause
-                    createWhereClause(filter, xpath, lastAttrXPath, lastTypeMapping,
-                            lastSourceType, store, sql);
+                    createWhereClause(filter, xpath, lastMappingStep, sql);
 
                     sql.append(" AND ");
                 } else {
@@ -122,7 +127,7 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
                 }
 
                 // join with root table
-                encodeJoinCondition(mappingSteps.getFirstStep(), sql, store);
+                encodeJoinCondition(mappingSteps, 0, sql);
 
                 out.write(sql.toString());
                 out.write(")");
@@ -139,41 +144,65 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
         }
     }
 
-    private void encodeJoinCondition(MappingStep mappingStep, StringBuffer sql, JDBCDataStore store)
+    private void encodeJoinCondition(MappingStepList mappingStepList, int stepIdx, StringBuffer sql)
             throws SQLException, IOException {
-        FeatureTypeMapping parentFeature = mappingStep.getFeatureTypeMapping();
-        NestedAttributeMapping nestedFeatureAttr = mappingStep.getNestedFeatureAttribute();
-        FeatureTypeMapping nestedFeature = nestedFeatureAttr.getNestedFeatureType();
+        MappingStep parentStep = mappingStepList.getStep(stepIdx);
+        MappingStep nestedStep = mappingStepList.getStep(stepIdx + 1);
+        FeatureTypeMapping parentFeature = parentStep.getFeatureTypeMapping();
+        JDBCDataStore store = (JDBCDataStore) parentFeature.getSource().getDataStore();
+        NestedAttributeMapping nestedFeatureAttr = parentStep.getNestedFeatureAttribute();
+        FeatureTypeMapping nestedFeature = nestedFeatureAttr.getFeatureTypeMapping(null);
 
         String parentTableName = parentFeature.getSource().getSchema().getName().getLocalPart();
+        String parentTableAlias = parentStep.getAlias();
         // TODO: what if source expression is not a literal?
         String parentTableColumn = nestedFeatureAttr.getSourceExpression().toString();
-        String nestedTableName = nestedFeature.getSource().getSchema().getName().getLocalPart();
+        // String nestedTableName = nestedFeature.getSource().getSchema().getName().getLocalPart();
+        String nestedTableAlias = nestedStep.getAlias();
         // TODO: what if source expression is not a literal?
         String nestedTableColumn = nestedFeatureAttr.getMapping(nestedFeature)
                 .getSourceExpression().toString();
 
-        encodeColumnName(store, parentTableColumn, parentTableName, sql, null);
+        if (stepIdx == 0) {
+            encodeColumnName(store, parentTableColumn, parentTableName, sql, null);
+        } else {
+            encodeAliasedColumnName(store, parentTableColumn, parentTableAlias, sql, null);
+        }
         sql.append(" = ");
-        encodeColumnName(store, nestedTableColumn, nestedTableName, sql, null);
+        encodeAliasedColumnName(store, nestedTableColumn, nestedTableAlias, sql, null);
     }
 
-    private void createWhereClause(Filter filter, String filterProperty, String newFilterProperty,
-            FeatureTypeMapping currentTypeMapping, SimpleFeatureType lastType, JDBCDataStore store,
+    private void createWhereClause(Filter filter, String nestedProperty, MappingStep mapping,
             StringBuffer sql) throws FilterToSQLException {
-        NestedToSimpleFilterVisitor duplicate = new NestedToSimpleFilterVisitor(filterProperty,
-                newFilterProperty);
+        String simpleProperty = mapping.getOwnAttributeXPath();
+        FeatureTypeMapping featureMapping = mapping.getFeatureTypeMapping();
+        JDBCDataStore store = (JDBCDataStore) featureMapping.getSource().getDataStore();
+        FeatureTypeMapping featureMappingForUnrolling = featureMapping;
+        if (mapping.isChainingByReference()) {
+            // last attribute xpath should be resolved against the parent feature
+            if (mapping.previous() != null) {
+                featureMappingForUnrolling = mapping.previous().getFeatureTypeMapping();
+            }
+        }
+        SimpleFeatureType sourceType = (SimpleFeatureType) featureMapping.getSource().getSchema();
 
+        NestedToSimpleFilterVisitor duplicate = new NestedToSimpleFilterVisitor(nestedProperty,
+                simpleProperty);
         Filter duplicated = (Filter) filter.accept(duplicate, null);
-        Filter unrolled = AppSchemaDataAccess.unrollFilter(duplicated, currentTypeMapping);
-        JoiningFieldEncoder fieldEncoder = new JoiningFieldEncoder(lastType.getTypeName(), store);
-        FilterToSQL nestedFilterToSQL = store.createFilterToSQL(lastType);
+        Filter unrolled = unrollFilter(duplicated, featureMappingForUnrolling);
+
+        JoiningFieldEncoder fieldEncoder = new JoiningFieldEncoder(mapping.getAlias(), store);
+        FilterToSQL nestedFilterToSQL = store.createFilterToSQL(sourceType);
         nestedFilterToSQL.setFieldEncoder(fieldEncoder);
-        sql.append(" ").append(nestedFilterToSQL.encodeToString(unrolled));
+        String encodedFilter = nestedFilterToSQL.encodeToString(unrolled);
+        sql.append(" ").append(encodedFilter);
     }
 
-    private StringBuffer encodeSelectKeyFrom(SimpleFeatureType lastType, JDBCDataStore store)
-            throws SQLException {
+    private StringBuffer encodeSelectKeyFrom(MappingStep lastMappingStep) throws SQLException {
+        FeatureTypeMapping lastTypeMapping = lastMappingStep.getFeatureTypeMapping();
+        JDBCDataStore store = (JDBCDataStore) lastTypeMapping.getSource().getDataStore();
+        SimpleFeatureType lastType = (SimpleFeatureType) lastTypeMapping.getSource().getSchema();
+
         // primary key
         PrimaryKey key = null;
 
@@ -189,7 +218,7 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
         for (PrimaryKeyColumn col : key.getColumns()) {
             colName = col.getName();
             sqlKeys.append(",");
-            encodeColumnName(store, colName, lastType.getTypeName(), sqlKeys, null);
+            encodeAliasedColumnName(store, colName, lastMappingStep.getAlias(), sqlKeys, null);
 
         }
         if (sqlKeys.length() <= 0) {
@@ -199,12 +228,21 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
         }
         sql.append(" FROM ");
         store.encodeTableName(lastType.getTypeName(), sql, null);
+        sql.append(" AS ");
+        store.dialect.encodeTableName(lastMappingStep.getAlias(), sql);
         return sql;
     }
 
-    public void encodeColumnName(JDBCDataStore store, String colName, String typeName,
+    private void encodeColumnName(JDBCDataStore store, String colName, String typeName,
             StringBuffer sql, Hints hints) throws SQLException {
         store.encodeTableName(typeName, sql, hints);
+        sql.append(".");
+        store.dialect.encodeColumnName(colName, sql);
+    }
+
+    private void encodeAliasedColumnName(JDBCDataStore store, String colName, String typeName,
+            StringBuffer sql, Hints hints) throws SQLException {
+        store.dialect.encodeTableName(typeName, sql);
         sql.append(".");
         store.dialect.encodeColumnName(colName, sql);
     }
@@ -231,4 +269,35 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
                 || filter instanceof PropertyIsBetween || filter instanceof PropertyIsNull;
     }
 
+    private Filter unrollFilter(Filter complexFilter, FeatureTypeMapping mappings) {
+        UnmappingFilterVisitorExcludingNestedMappings visitor = new UnmappingFilterVisitorExcludingNestedMappings(mappings);
+        Filter unrolledFilter = (Filter) complexFilter.accept(visitor, null);
+        return unrolledFilter;
+    }
+
+    private class UnmappingFilterVisitorExcludingNestedMappings extends UnmappingFilterVisitor {
+
+        public UnmappingFilterVisitorExcludingNestedMappings(FeatureTypeMapping mappings) {
+            super(mappings);
+        }
+
+        @Override
+        public List<Expression> visit(PropertyName expr, Object arg1) {
+            String targetXPath = expr.getPropertyName();
+            NamespaceSupport namespaces = mappings.getNamespaces();
+            AttributeDescriptor root = mappings.getTargetFeature();
+
+            // break into single steps
+            StepList simplifiedSteps = XPath.steps(root, targetXPath, namespaces);
+
+            List<Expression> matchingMappings = mappings.findMappingsFor(simplifiedSteps, false);
+
+            if (matchingMappings.size() == 0) {
+                throw new IllegalArgumentException("Can't find source expression for: " + targetXPath);
+            }
+
+            return matchingMappings;
+        }
+
+    }
 }

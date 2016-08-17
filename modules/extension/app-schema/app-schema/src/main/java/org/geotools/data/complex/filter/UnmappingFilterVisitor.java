@@ -135,7 +135,7 @@ public class UnmappingFilterVisitor implements org.opengis.filter.FilterVisitor,
     private static final Logger LOGGER = org.geotools.util.logging.Logging
             .getLogger(UnmappingFilterVisitor.class.getPackage().getName());
 
-    private FeatureTypeMapping mappings;
+    protected FeatureTypeMapping mappings;
 
     private static final FilterFactory2 ff = CommonFactoryFinder.getFilterFactory2(null);
 

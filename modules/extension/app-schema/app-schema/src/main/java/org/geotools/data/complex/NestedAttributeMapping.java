@@ -145,17 +145,6 @@ public class NestedAttributeMapping extends AttributeMapping {
         return true;
     }
 
-    public FeatureTypeMapping getNestedFeatureType() throws IOException {
-    	Object featureTypeName = getNestedFeatureType(null);
-        if (featureTypeName == null || !(featureTypeName instanceof Name)) {
-            // this could be legitimate, for some null values polymorphism use case
-            // or that it's set to be xlink:href
-            return null;
-        }
-        return AppSchemaDataAccessRegistry
-                .getMappingByName((Name) featureTypeName);
-    }
-    
     /**
      * Get matching input features that are stored in this mapping using a supplied link value.
      * 
@@ -454,8 +443,11 @@ public class NestedAttributeMapping extends AttributeMapping {
         return mappingSource;
     }
 
-    public Object getNestedFeatureTypeName(Object feature) {
-    	Object fTypeValue;
+    /**
+     * @return the nested feature type name
+     */
+    public Object getNestedFeatureType(Object feature) {
+        Object fTypeValue;
         if (isConditional) {
             if (feature == null) {
                 throw new IllegalArgumentException("Feature parameter is required!");
@@ -472,18 +464,10 @@ public class NestedAttributeMapping extends AttributeMapping {
             }
         } else {
             fTypeValue = nestedFeatureType.toString();
-        }  
-        return fTypeValue;
-    }
-    
-    /**
-     * @return the nested feature type name
-     */
-    public Object getNestedFeatureType(Object feature) {
-        Object fTypeValue = getNestedFeatureTypeName(feature);
+        }
         return Types.degloseName(String.valueOf(fTypeValue), namespaces);
     }
-    
+
     public boolean isConditional() {
         return this.isConditional;
     }

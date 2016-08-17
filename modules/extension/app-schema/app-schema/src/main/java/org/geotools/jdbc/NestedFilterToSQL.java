@@ -133,96 +133,96 @@ public class NestedFilterToSQL extends FilterToSQL {
     }
 
     protected Object visitBinaryComparison(Filter filter, Object extraData, String xpath) {
-        try {
+//        try {
 
-            out.write("EXISTS (");
-
-            List<AttributeMapping> mappings = new ArrayList<AttributeMapping>();
-            List<AttributeMapping> rootAttributes = rootMapping.getAttributeMappings();
-
-            List<AttributeMapping> currentAttributes = rootAttributes;
-            String currentXPath = xpath;
-            FeatureTypeMapping currentTypeMapping = rootMapping;
-            boolean found = true;
-            while (currentXPath.indexOf("/") != -1 && found) {
-                found = false;
-                int pos = 0;
-                AttributeMapping currentAttribute = null;
-                for (AttributeMapping attributeMapping : currentAttributes) {
-                    String targetXPath = attributeMapping.getTargetXPath().toString();
-                    if (currentXPath.startsWith(targetXPath)) {
-                        if (attributeMapping instanceof JoiningNestedAttributeMapping) {
-                            String nestedFeatureType = ((JoiningNestedAttributeMapping) attributeMapping)
-                                    .getNestedFeatureTypeName(null).toString();
-
-                            if (currentXPath.startsWith(targetXPath + "/" + nestedFeatureType)) {
-                                pos += targetXPath.length() + nestedFeatureType.length() + 2;
-                                currentAttribute = attributeMapping;
-                                found = true;
-                            }
-                        }
-                    }
-
-                }
-                if (currentAttribute != null) {
-                    mappings.add(currentAttribute);
-                    currentTypeMapping = ((JoiningNestedAttributeMapping) currentAttribute)
-                            .getNestedFeatureType();
-                }
-                currentXPath = currentXPath.substring(pos);
-                currentAttributes = currentTypeMapping.getAttributeMappings();
-            }
-
-            SimpleFeatureType lastType = (SimpleFeatureType) currentTypeMapping.getSource()
-                    .getSchema();
-            JDBCDataStore store = (JDBCDataStore) currentTypeMapping.getSource().getDataStore();
-
-            StringBuffer sql = encodeSelectKeyFrom(lastType, store);
-            for (int i = 0; i < mappings.size() - 1; i++) {
-                JoiningNestedAttributeMapping leftJoin = (JoiningNestedAttributeMapping) mappings
-                        .get(i);
-                String leftTableName = leftJoin.getNestedFeatureType().getSource().getSchema()
-                        .getName().getLocalPart();
-                JoiningNestedAttributeMapping rightJoin = (JoiningNestedAttributeMapping) mappings
-                        .get(i + 1);
-                String rightTableName = rightJoin.getNestedFeatureType().getSource().getSchema()
-                        .getName().getLocalPart();
-                sql.append(" INNER JOIN ");
-
-                store.encodeTableName(leftTableName, sql, null);
-                sql.append(" ON ");
-                encodeColumnName(store, rightJoin.getSourceExpression().toString(), leftTableName,
-                        sql, null);
-                sql.append(" = ");
-                encodeColumnName(store, rightJoin.getMapping(rightJoin.getNestedFeatureType())
-                        .getSourceExpression().toString(), rightTableName, sql, null);
-            }
-            if (!currentXPath.equals("")) {
-                createWhereClause(filter, xpath, currentXPath, currentTypeMapping, lastType, store,
-                        sql);
-
-                JoiningNestedAttributeMapping firstJoin = (JoiningNestedAttributeMapping) mappings
-                        .get(0);
-
-                sql.append(" AND ");
-                encodeColumnName(store, firstJoin.getSourceExpression().toString(), rootMapping
-                        .getSource().getSchema().getName().getLocalPart(), sql, null);
-                sql.append(" = ");
-                encodeColumnName(store, firstJoin.getMapping(firstJoin.getNestedFeatureType())
-                        .getSourceExpression().toString(), firstJoin.getNestedFeatureType()
-                        .getSource().getSchema().getName().getLocalPart(), sql, null);
-            }
-            out.write(sql.toString());
-            out.write(")");
+//            out.write("EXISTS (");
+//
+//            List<AttributeMapping> mappings = new ArrayList<AttributeMapping>();
+//            List<AttributeMapping> rootAttributes = rootMapping.getAttributeMappings();
+//
+//            List<AttributeMapping> currentAttributes = rootAttributes;
+//            String currentXPath = xpath;
+//            FeatureTypeMapping currentTypeMapping = rootMapping;
+//            boolean found = true;
+//            while (currentXPath.indexOf("/") != -1 && found) {
+//                found = false;
+//                int pos = 0;
+//                AttributeMapping currentAttribute = null;
+//                for (AttributeMapping attributeMapping : currentAttributes) {
+//                    String targetXPath = attributeMapping.getTargetXPath().toString();
+//                    if (currentXPath.startsWith(targetXPath)) {
+//                        if (attributeMapping instanceof JoiningNestedAttributeMapping) {
+//                            String nestedFeatureType = ((JoiningNestedAttributeMapping) attributeMapping)
+//                                    .getNestedFeatureTypeName(null).toString();
+//
+//                            if (currentXPath.startsWith(targetXPath + "/" + nestedFeatureType)) {
+//                                pos += targetXPath.length() + nestedFeatureType.length() + 2;
+//                                currentAttribute = attributeMapping;
+//                                found = true;
+//                            }
+//                        }
+//                    }
+//
+//                }
+//                if (currentAttribute != null) {
+//                    mappings.add(currentAttribute);
+//                    currentTypeMapping = ((JoiningNestedAttributeMapping) currentAttribute)
+//                            .getNestedFeatureType();
+//                }
+//                currentXPath = currentXPath.substring(pos);
+//                currentAttributes = currentTypeMapping.getAttributeMappings();
+//            }
+//
+//            SimpleFeatureType lastType = (SimpleFeatureType) currentTypeMapping.getSource()
+//                    .getSchema();
+//            JDBCDataStore store = (JDBCDataStore) currentTypeMapping.getSource().getDataStore();
+//
+//            StringBuffer sql = encodeSelectKeyFrom(lastType, store);
+//            for (int i = 0; i < mappings.size() - 1; i++) {
+//                JoiningNestedAttributeMapping leftJoin = (JoiningNestedAttributeMapping) mappings
+//                        .get(i);
+//                String leftTableName = leftJoin.getNestedFeatureType().getSource().getSchema()
+//                        .getName().getLocalPart();
+//                JoiningNestedAttributeMapping rightJoin = (JoiningNestedAttributeMapping) mappings
+//                        .get(i + 1);
+//                String rightTableName = rightJoin.getNestedFeatureType().getSource().getSchema()
+//                        .getName().getLocalPart();
+//                sql.append(" INNER JOIN ");
+//
+//                store.encodeTableName(leftTableName, sql, null);
+//                sql.append(" ON ");
+//                encodeColumnName(store, rightJoin.getSourceExpression().toString(), leftTableName,
+//                        sql, null);
+//                sql.append(" = ");
+//                encodeColumnName(store, rightJoin.getMapping(rightJoin.getNestedFeatureType())
+//                        .getSourceExpression().toString(), rightTableName, sql, null);
+//            }
+//            if (!currentXPath.equals("")) {
+//                createWhereClause(filter, xpath, currentXPath, currentTypeMapping, lastType, store,
+//                        sql);
+//
+//                JoiningNestedAttributeMapping firstJoin = (JoiningNestedAttributeMapping) mappings
+//                        .get(0);
+//
+//                sql.append(" AND ");
+//                encodeColumnName(store, firstJoin.getSourceExpression().toString(), rootMapping
+//                        .getSource().getSchema().getName().getLocalPart(), sql, null);
+//                sql.append(" = ");
+//                encodeColumnName(store, firstJoin.getMapping(firstJoin.getNestedFeatureType())
+//                        .getSourceExpression().toString(), firstJoin.getNestedFeatureType()
+//                        .getSource().getSchema().getName().getLocalPart(), sql, null);
+//            }
+//            out.write(sql.toString());
+//            out.write(")");
             return extraData;
 
-        } catch (java.io.IOException ioe) {
-            throw new RuntimeException("Problem writing filter: ", ioe);
-        } catch (SQLException e) {
-            throw new RuntimeException("Problem writing filter: ", e);
-        } catch (FilterToSQLException e) {
-            throw new RuntimeException("Problem writing filter: ", e);
-        }
+//        } catch (java.io.IOException ioe) {
+//            throw new RuntimeException("Problem writing filter: ", ioe);
+//        } catch (SQLException e) {
+//            throw new RuntimeException("Problem writing filter: ", e);
+//        } catch (FilterToSQLException e) {
+//            throw new RuntimeException("Problem writing filter: ", e);
+//        }
     }
 
     @Override
