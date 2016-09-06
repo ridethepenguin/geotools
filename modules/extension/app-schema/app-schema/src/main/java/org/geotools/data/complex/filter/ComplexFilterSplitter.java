@@ -2,7 +2,7 @@
  *    GeoTools - The Open Source Java GIS Toolkit
  *    http://geotools.org
  *
- *    (C) 2011, Open Source Geospatial Foundation (OSGeo)
+ *    (C) 2011-2016, Open Source Geospatial Foundation (OSGeo)
  *
  *    This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,7 @@ import java.util.List;
 
 import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.NestedAttributeMapping;
-import org.geotools.data.complex.filter.NestedMappingsExtractor.MappingStepList;
+import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainedAttributeDescriptor;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
@@ -153,12 +153,19 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         for (NestedAttributeMapping mapping : mappings.getNestedMappings()) {
             if (exprSteps.startsWith(mapping.getTargetXPath())) {
                 // verify that the feature chain can be known a priori
-                NestedMappingsExtractor nestedMappingsExtractor = new NestedMappingsExtractor(mappings);
-                nestedMappingsExtractor.visit(expression, null);
-                MappingStepList mappingSteps = nestedMappingsExtractor.getMappingSteps();
-                if (mappingSteps.size() > 0 && mappingSteps.isJoiningEnabled()) {
+                FeatureChainedAttributeVisitor nestedAttrExtractor = new FeatureChainedAttributeVisitor(
+                        mappings);
+                nestedAttrExtractor.visit(expression, null);
+                FeatureChainedAttributeDescriptor nestedAttrDescr = nestedAttrExtractor
+                        .getFeatureChainedAttribute();
+                if (nestedAttrDescr.chainSize() > 0 && nestedAttrDescr.isJoiningEnabled()) {
                     nestedAttributes++;
-                    matchingMappings.add(mapping.getSourceExpression());
+
+                    FeatureTypeMapping featureMapping = nestedAttrDescr
+                            .getFeatureTypeOwningAttribute();
+                    List<Expression> nestedMappings = featureMapping.findMappingsFor(
+                            nestedAttrDescr.getAttributePath(), false);
+                    matchingMappings.addAll(nestedMappings);
                 }
             }
         }

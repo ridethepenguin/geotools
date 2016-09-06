@@ -2,7 +2,7 @@
  *    GeoTools - The Open Source Java GIS Toolkit
  *    http://geotools.org
  * 
- *    (C) 2002-2008, Open Source Geospatial Foundation (OSGeo)
+ *    (C) 2002-2016, Open Source Geospatial Foundation (OSGeo)
  *        
  *    This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -311,7 +311,16 @@ public class FilterToSQL implements FilterVisitor, ExpressionVisitor {
         this.encode(expression);
         return out.getBuffer().toString();
     }
-    
+
+    /**
+     * Gets the featuretype the encoder is encoding sql for.
+     * 
+     * @return the feature type
+     */
+    public SimpleFeatureType getFeatureType() {
+        return featureType;
+    }
+
     /**
      * Sets the featuretype the encoder is encoding sql for.
      * <p>
@@ -1622,6 +1631,15 @@ public class FilterToSQL implements FilterVisitor, ExpressionVisitor {
     }
 
     /**
+     * Gets the SQL name escape string.
+     * 
+     * @return the string to use for escaping names in SQL 
+     */
+    public String getSqlNameEscape() {
+        return sqlNameEscape;
+    }
+
+    /**
      * Sets the SQL name escape string.
      * 
      * <p>
@@ -1694,6 +1712,15 @@ public class FilterToSQL implements FilterVisitor, ExpressionVisitor {
      * Current field encoder
      */
     protected FieldEncoder fieldEncoder = DefaultFieldEncoder.DEFAULT_FIELD_ENCODER;
+    
+    /**
+     * Return field encoder
+     * 
+     * @return the field encoder currently set
+     */
+    public FieldEncoder getFieldEncoder() {
+        return fieldEncoder;
+    }
     
     /**
      * Set custom field encoder

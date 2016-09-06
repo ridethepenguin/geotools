@@ -2,7 +2,7 @@
  *    GeoTools - The Open Source Java GIS Toolkit
  *    http://geotools.org
  *
- *    (C) 2011, Open Source Geospatial Foundation (OSGeo)
+ *    (C) 2011-2016, Open Source Geospatial Foundation (OSGeo)
  *
  *    This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -31,8 +31,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
-
-import net.sf.cglib.proxy.Enhancer;
 
 import org.geotools.data.FeatureReader;
 import org.geotools.data.Query;
@@ -693,30 +691,73 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
         
         return sql.toString();
     }        
-    
-    private Object createNestedFilter(Filter filter,
-			JoiningQuery query, FilterToSQL filterToSQL) throws FilterToSQLException {
-    	/*NestedFilterToSQL nested = new NestedFilterToSQL(query.getRootMapping(), filterToSQL);
-    	nested.setInline(true);
-    	return nested.encodeToString(filter);*/
-    	Enhancer enhancer = new Enhancer();
-    	enhancer.setSuperclass(filterToSQL.getClass());
-    	enhancer.setCallback(new NestedFilterToSQLProxy(query.getRootMapping()));
-    	JDBCDataStore dataStore = (JDBCDataStore)query.getRootMapping().getSource().getDataStore();
-    	SQLDialect dialect = dataStore.dialect;
-		FilterToSQL enhancedFilterToSQL = (FilterToSQL) enhancer.create(new Class[] {dialect.getClass()}, new Object[] {dialect});
-    	enhancedFilterToSQL.setInline(true);return enhancedFilterToSQL.encodeToString(filter);
-	}
 
-	private boolean isNestedFilter(Filter filter) {
-		FilterAttributeExtractor extractor = new FilterAttributeExtractor();
-		filter.accept(extractor, null);
-		for(String attribute : extractor.getAttributeNames()) {
-			if(attribute.indexOf("/") != -1)
-				return true;
-		}
-		return false;
-	}
+    @SuppressWarnings("unchecked")
+    private Object createNestedFilter(Filter filter, JoiningQuery query, FilterToSQL filterToSQL)
+            throws FilterToSQLException {
+        NestedFilterToSQL nested = new NestedFilterToSQL(query.getRootMapping(), filterToSQL);
+        nested.setInline(true);
+        return nested.encodeToString(filter);
+
+//        Class<? extends FilterToSQL> filterToSQLClass = filterToSQL.getClass();
+//
+//        // determine exact type of the dialect argument taken by FilterToSQL's constructor
+//        Constructor<?>[] constructors = filterToSQLClass.getConstructors();
+//        boolean hasNoArgConstructor = false;
+//        Class<? extends SQLDialect> dialectClass = null;
+//        for (Constructor<?> constructor : constructors) {
+//            Parameter[] parameters = constructor.getParameters();
+//            if (parameters.length == 0) {
+//                hasNoArgConstructor = true;
+//            } else if (parameters.length == 1) {
+//                Parameter arg = parameters[0];
+//                if (SQLDialect.class.isAssignableFrom(arg.getType())) {
+//                    dialectClass = (Class<? extends SQLDialect>) arg.getType();
+//                }
+//            }
+//        }
+//
+//        Enhancer enhancer = new Enhancer();
+//        enhancer.setSuperclass(filterToSQLClass);
+//        enhancer.setCallback(new NestedFilterToSQLProxy(query.getRootMapping()));
+//
+//        JDBCDataStore dataStore = (JDBCDataStore) query.getRootMapping().getSource().getDataStore();
+//        SQLDialect dialect = dataStore.dialect;
+//        FilterToSQL enhancedFilterToSQL = null;
+//        if (dialectClass != null && dialectClass.isAssignableFrom(dialect.getClass())) {
+//            // use constructor taking dialect as argument
+//            Class<?>[] argTypes = new Class[] { dialectClass };
+//            Object[] args = new Object[] { dialect };
+//            enhancedFilterToSQL = (FilterToSQL) enhancer.create(argTypes, args);
+//        } else if (hasNoArgConstructor) {
+//            // use no-arg constructor
+//            enhancedFilterToSQL = (FilterToSQL) enhancer.create();
+//        } else {
+//            // don't know how to proxy filterToSQL, unable to encode filter
+//            LOGGER.warning("Unable to encode nested filter: don't know how to proxy filterToSQL of type "
+//                    + filterToSQLClass.getName());
+//            return "";
+//        }
+//
+//        // copy state to proxied instance
+//        enhancedFilterToSQL.setFeatureType(filterToSQL.getFeatureType());
+//        enhancedFilterToSQL.setFieldEncoder(filterToSQL.getFieldEncoder());
+//        enhancedFilterToSQL.setSqlNameEscape(filterToSQL.getSqlNameEscape());
+//        enhancedFilterToSQL.setDatabaseSchema(filterToSQL.getDatabaseSchema());
+//        enhancedFilterToSQL.setInline(true);
+//
+//        return enhancedFilterToSQL.encodeToString(filter);
+    }
+
+    private boolean isNestedFilter(Filter filter) {
+        FilterAttributeExtractor extractor = new FilterAttributeExtractor();
+        filter.accept(extractor, null);
+        for (String attribute : extractor.getAttributeNames()) {
+            if (attribute.indexOf("/") != -1)
+                return true;
+        }
+        return false;
+    }
 
 	/**
      * Apply paging. It's pretty straight forward except when the view is denormalised, because we don't know

@@ -1,3 +1,20 @@
+/*
+ *    GeoTools - The Open Source Java GIS Toolkit
+ *    http://geotools.org
+ * 
+ *    (C) 2016, Open Source Geospatial Foundation (OSGeo)
+ *    
+ *    This library is free software; you can redistribute it and/or
+ *    modify it under the terms of the GNU Lesser General Public
+ *    License as published by the Free Software Foundation;
+ *    version 2.1 of the License.
+ *
+ *    This library is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *    Lesser General Public License for more details.
+ */
+
 package org.geotools.jdbc;
 
 import java.io.IOException;
@@ -11,21 +28,19 @@ import java.util.List;
 import net.sf.cglib.proxy.MethodInterceptor;
 import net.sf.cglib.proxy.MethodProxy;
 
-import org.geotools.data.complex.AppSchemaDataAccess;
 import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.NestedAttributeMapping;
-import org.geotools.data.complex.filter.NestedMappingsExtractor;
-import org.geotools.data.complex.filter.XPath;
-import org.geotools.data.complex.filter.NestedMappingsExtractor.MappingStep;
-import org.geotools.data.complex.filter.NestedMappingsExtractor.MappingStepList;
-import org.geotools.data.complex.filter.XPathUtil.StepList;
+import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor;
+import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainLink;
+import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainedAttributeDescriptor;
 import org.geotools.data.complex.filter.UnmappingFilterVisitor;
+import org.geotools.data.complex.filter.XPath;
+import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.data.jdbc.FilterToSQLException;
 import org.geotools.factory.Hints;
 import org.geotools.filter.FilterAttributeExtractor;
 import org.geotools.filter.FilterFactoryImplNamespaceAware;
-import org.geotools.filter.NestedAttributeExpression;
 import org.geotools.jdbc.JoiningJDBCFeatureSource.JoiningFieldEncoder;
 import org.opengis.feature.simple.SimpleFeatureType;
 import org.opengis.feature.type.AttributeDescriptor;
@@ -88,20 +103,19 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
     private Object visitComparison(Filter filter, Writer out, Object extraData, String xpath) {
         try {
 
-            NestedMappingsExtractor nestedMappingsExtractor = new NestedMappingsExtractor(
-                    rootMapping);
+            FeatureChainedAttributeVisitor nestedMappingsExtractor = new FeatureChainedAttributeVisitor(rootMapping);
             nestedMappingsExtractor.visit(ff.property(xpath), null);
-            MappingStepList mappingSteps = nestedMappingsExtractor.getMappingSteps();
+            FeatureChainedAttributeDescriptor nestedAttrDescr = nestedMappingsExtractor.getFeatureChainedAttribute();
 
-            int numMappings = mappingSteps.size();
-            if (numMappings > 0 && mappingSteps.isJoiningEnabled()) {
+            int numMappings = nestedAttrDescr.chainSize();
+            if (numMappings > 0 && nestedAttrDescr.isJoiningEnabled()) {
                 out.write("EXISTS (");
 
-                MappingStep lastMappingStep = mappingSteps.getLastStep();
+                FeatureChainLink lastMappingStep = nestedAttrDescr.getLastLink();
                 StringBuffer sql = encodeSelectKeyFrom(lastMappingStep);
 
                 for (int i = numMappings - 2; i > 0; i--) {
-                    MappingStep mappingStep = mappingSteps.getStep(i);
+                    FeatureChainLink mappingStep = nestedAttrDescr.getLink(i);
                     if (mappingStep.hasNestedFeature()) {
                         FeatureTypeMapping parentFeature = mappingStep.getFeatureTypeMapping();
                         JDBCDataStore store = (JDBCDataStore) parentFeature.getSource()
@@ -111,15 +125,15 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
 
                         sql.append(" INNER JOIN ");
                         store.encodeTableName(parentTableName, sql, null);
-                        sql.append(" AS ");
+                        sql.append(" ");
                         store.dialect.encodeTableName(mappingStep.getAlias(), sql);
                         sql.append(" ON ");
-                        encodeJoinCondition(mappingSteps, i, sql);
+                        encodeJoinCondition(nestedAttrDescr, i, sql);
                     }
                 }
 
-                if (lastMappingStep.hasOwnAttribute()) {
-                    createWhereClause(filter, xpath, lastMappingStep, sql);
+                if (nestedAttrDescr.getAttributePath() != null) {
+                    createWhereClause(filter, xpath, nestedAttrDescr, sql);
 
                     sql.append(" AND ");
                 } else {
@@ -127,7 +141,7 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
                 }
 
                 // join with root table
-                encodeJoinCondition(mappingSteps, 0, sql);
+                encodeJoinCondition(nestedAttrDescr, 0, sql);
 
                 out.write(sql.toString());
                 out.write(")");
@@ -144,10 +158,10 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
         }
     }
 
-    private void encodeJoinCondition(MappingStepList mappingStepList, int stepIdx, StringBuffer sql)
-            throws SQLException, IOException {
-        MappingStep parentStep = mappingStepList.getStep(stepIdx);
-        MappingStep nestedStep = mappingStepList.getStep(stepIdx + 1);
+    private void encodeJoinCondition(FeatureChainedAttributeDescriptor nestedAttrDescr, int stepIdx,
+            StringBuffer sql) throws SQLException, IOException {
+        FeatureChainLink parentStep = nestedAttrDescr.getLink(stepIdx);
+        FeatureChainLink nestedStep = nestedAttrDescr.getLink(stepIdx + 1);
         FeatureTypeMapping parentFeature = parentStep.getFeatureTypeMapping();
         JDBCDataStore store = (JDBCDataStore) parentFeature.getSource().getDataStore();
         NestedAttributeMapping nestedFeatureAttr = parentStep.getNestedFeatureAttribute();
@@ -172,33 +186,36 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
         encodeAliasedColumnName(store, nestedTableColumn, nestedTableAlias, sql, null);
     }
 
-    private void createWhereClause(Filter filter, String nestedProperty, MappingStep mapping,
-            StringBuffer sql) throws FilterToSQLException {
-        String simpleProperty = mapping.getOwnAttributeXPath();
-        FeatureTypeMapping featureMapping = mapping.getFeatureTypeMapping();
+    private void createWhereClause(Filter filter, String nestedProperty,
+            FeatureChainedAttributeDescriptor nestedAttrDescr, StringBuffer sql) throws FilterToSQLException {
+        FeatureChainLink lastLink = nestedAttrDescr.getLastLink();
+        String simpleProperty = nestedAttrDescr.getAttributePath().toString();
+        FeatureTypeMapping featureMapping = lastLink.getFeatureTypeMapping();
         JDBCDataStore store = (JDBCDataStore) featureMapping.getSource().getDataStore();
-        FeatureTypeMapping featureMappingForUnrolling = featureMapping;
-        if (mapping.isChainingByReference()) {
-            // last attribute xpath should be resolved against the parent feature
-            if (mapping.previous() != null) {
-                featureMappingForUnrolling = mapping.previous().getFeatureTypeMapping();
-            }
-        }
+        FeatureTypeMapping featureMappingForUnrolling = nestedAttrDescr.getFeatureTypeOwningAttribute();
         SimpleFeatureType sourceType = (SimpleFeatureType) featureMapping.getSource().getSchema();
 
-        NestedToSimpleFilterVisitor duplicate = new NestedToSimpleFilterVisitor(nestedProperty,
+        NamespaceAwareAttributeRenameVisitor duplicate = new NamespaceAwareAttributeRenameVisitor(nestedProperty,
                 simpleProperty);
         Filter duplicated = (Filter) filter.accept(duplicate, null);
         Filter unrolled = unrollFilter(duplicated, featureMappingForUnrolling);
 
-        JoiningFieldEncoder fieldEncoder = new JoiningFieldEncoder(mapping.getAlias(), store);
-        FilterToSQL nestedFilterToSQL = store.createFilterToSQL(sourceType);
+        JoiningFieldEncoder fieldEncoder = new JoiningFieldEncoder(lastLink.getAlias(), store);
+        FilterToSQL nestedFilterToSQL = null;
+        if (store.getSQLDialect() instanceof PreparedStatementSQLDialect ) {
+            PreparedFilterToSQL preparedFilterToSQL = store.createPreparedFilterToSQL(sourceType);
+            // disable prepared statements to have literals actually encoded in the SQL
+            preparedFilterToSQL.setPrepareEnabled(false);
+            nestedFilterToSQL = preparedFilterToSQL;
+        } else {
+            nestedFilterToSQL = store.createFilterToSQL(sourceType);
+        }
         nestedFilterToSQL.setFieldEncoder(fieldEncoder);
         String encodedFilter = nestedFilterToSQL.encodeToString(unrolled);
         sql.append(" ").append(encodedFilter);
     }
 
-    private StringBuffer encodeSelectKeyFrom(MappingStep lastMappingStep) throws SQLException {
+    private StringBuffer encodeSelectKeyFrom(FeatureChainLink lastMappingStep) throws SQLException {
         FeatureTypeMapping lastTypeMapping = lastMappingStep.getFeatureTypeMapping();
         JDBCDataStore store = (JDBCDataStore) lastTypeMapping.getSource().getDataStore();
         SimpleFeatureType lastType = (SimpleFeatureType) lastTypeMapping.getSource().getSchema();
@@ -228,7 +245,7 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
         }
         sql.append(" FROM ");
         store.encodeTableName(lastType.getTypeName(), sql, null);
-        sql.append(" AS ");
+        sql.append(" ");
         store.dialect.encodeTableName(lastMappingStep.getAlias(), sql);
         return sql;
     }
@@ -270,7 +287,8 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
     }
 
     private Filter unrollFilter(Filter complexFilter, FeatureTypeMapping mappings) {
-        UnmappingFilterVisitorExcludingNestedMappings visitor = new UnmappingFilterVisitorExcludingNestedMappings(mappings);
+        UnmappingFilterVisitorExcludingNestedMappings visitor = new UnmappingFilterVisitorExcludingNestedMappings(
+                mappings);
         Filter unrolledFilter = (Filter) complexFilter.accept(visitor, null);
         return unrolledFilter;
     }
@@ -293,7 +311,8 @@ public class NestedFilterToSQLProxy implements MethodInterceptor {
             List<Expression> matchingMappings = mappings.findMappingsFor(simplifiedSteps, false);
 
             if (matchingMappings.size() == 0) {
-                throw new IllegalArgumentException("Can't find source expression for: " + targetXPath);
+                throw new IllegalArgumentException("Can't find source expression for: "
+                        + targetXPath);
             }
 
             return matchingMappings;
