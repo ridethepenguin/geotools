@@ -255,17 +255,106 @@ public class NestedFilterToSQL extends FilterToSQL {
     @Override
     public Object visit(PropertyIsEqualTo filter, Object extraData) {
         String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
+        if (!hasNestedAttributes(xpath, rootMapping)) {
             return original.visit(filter, extraData);
         }
 
         return visitBinaryComparison(filter, extraData, xpath[0]);
-
     }
 
-    private boolean hasNestedAttributes(String[] xpaths) {
+    @Override
+    public Object visit(PropertyIsBetween filter, Object extraData) throws RuntimeException {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(PropertyIsLike filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(PropertyIsGreaterThanOrEqualTo filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(PropertyIsGreaterThan filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(PropertyIsLessThan filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(PropertyIsLessThanOrEqualTo filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(PropertyIsNotEqualTo filter, Object extraData) {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(PropertyIsNull filter, Object extraData) throws RuntimeException {
+        String[] xpath = getAttributesXPath(filter);
+        if (!hasNestedAttributes(xpath, rootMapping)) {
+            return original.visit(filter, extraData);
+        }
+        return visitBinaryComparison(filter, extraData, xpath[0]);
+    }
+
+    @Override
+    public Object visit(Id filter, Object extraData) {
+        return original.visit(filter, extraData);
+    }
+
+    public static boolean isNestedFilter(Filter filter, FeatureTypeMapping rootMapping) {
+        FilterAttributeExtractor extractor = new FilterAttributeExtractor();
+        filter.accept(extractor, null);
+        return hasNestedAttributes(extractor.getAttributeNames(), rootMapping);
+    }
+
+    private static boolean hasNestedAttributes(String[] xpaths, FeatureTypeMapping rootMapping) {
+        FilterFactoryImplNamespaceAware ff = new FilterFactoryImplNamespaceAware();
+        FeatureChainedAttributeVisitor v = new FeatureChainedAttributeVisitor(rootMapping);
         for (String xpath : xpaths) {
-            if (xpath.indexOf("/") != -1) {
+            if (xpath == null || xpath.trim().isEmpty()) {
+                continue;
+            }
+            v.visit(ff.property(xpath, rootMapping.getNamespaces()), null);
+            FeatureChainedAttributeDescriptor attrDescr = v.getFeatureChainedAttribute();
+            if (attrDescr.chainSize() > 1) {
                 return true;
             }
         }
@@ -276,83 +365,6 @@ public class NestedFilterToSQL extends FilterToSQL {
         FilterAttributeExtractor extractor = new FilterAttributeExtractor();
         filter.accept(extractor, null);
         return extractor.getAttributeNames();
-    }
-
-    @Override
-    public Object visit(PropertyIsBetween filter, Object extraData) throws RuntimeException {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(PropertyIsLike filter, Object extraData) {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(PropertyIsGreaterThanOrEqualTo filter, Object extraData) {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(PropertyIsGreaterThan filter, Object extraData) {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(PropertyIsLessThan filter, Object extraData) {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(PropertyIsLessThanOrEqualTo filter, Object extraData) {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(PropertyIsNotEqualTo filter, Object extraData) {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(PropertyIsNull filter, Object extraData) throws RuntimeException {
-        String[] xpath = getAttributesXPath(filter);
-        if (!hasNestedAttributes(xpath)) {
-            return original.visit(filter, extraData);
-        }
-        return visitBinaryComparison(filter, extraData, xpath[0]);
-    }
-
-    @Override
-    public Object visit(Id filter, Object extraData) {
-        return original.visit(filter, extraData);
     }
 
     private Filter unrollFilter(Filter complexFilter, FeatureTypeMapping mappings) {

@@ -83,6 +83,9 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
         }
         Feature feature = (Feature) data;
 
+        // reset outcome of the visit
+        chainedAttribute = new FeatureChainedAttributeDescriptor();
+
         try {
             walkXPath(expression.getPropertyName(), feature);
         } catch (IOException e) {

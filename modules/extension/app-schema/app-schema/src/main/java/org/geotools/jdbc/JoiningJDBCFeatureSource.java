@@ -35,6 +35,9 @@ import java.util.logging.Logger;
 import org.geotools.data.FeatureReader;
 import org.geotools.data.Query;
 import org.geotools.data.Transaction;
+import org.geotools.data.complex.FeatureTypeMapping;
+import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor;
+import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainedAttributeDescriptor;
 import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.data.jdbc.FilterToSQLException;
 import org.geotools.data.joining.JoiningQuery;
@@ -44,6 +47,7 @@ import org.geotools.feature.AttributeTypeBuilder;
 import org.geotools.feature.NameImpl;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
 import org.geotools.filter.FilterAttributeExtractor;
+import org.geotools.filter.FilterFactoryImplNamespaceAware;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
 import org.geotools.filter.visitor.SimplifyingFilterVisitor;
 import org.geotools.util.logging.Logging;
@@ -597,7 +601,7 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                              // if (i < lastSortBy.length-1) sortBySQL.append(",");
                              sortBySQL.append(" FROM ");
                              getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints()); 
-                             if(isNestedFilter(filter)) {
+                             if(NestedFilterToSQL.isNestedFilter(filter, query.getRootMapping())) {
                             	 sortBySQL.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
                              } else {
                             	 sortBySQL.append(" ").append(toSQL.encodeToString(filter));
@@ -651,7 +655,7 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                     }
                 } else if (!pagingApplied) {
                     toSQL.setFieldEncoder(new JoiningFieldEncoder(curTypeName, getDataStore()));
-                    if(isNestedFilter(filter)) {
+                    if(NestedFilterToSQL.isNestedFilter(filter, query.getRootMapping())) {
                    	 	sql.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
                     } else {
                     	sql.append(" ").append(toSQL.encodeToString(filter));
@@ -749,17 +753,7 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
 //        return enhancedFilterToSQL.encodeToString(filter);
     }
 
-    private boolean isNestedFilter(Filter filter) {
-        FilterAttributeExtractor extractor = new FilterAttributeExtractor();
-        filter.accept(extractor, null);
-        for (String attribute : extractor.getAttributeNames()) {
-            if (attribute.indexOf("/") != -1)
-                return true;
-        }
-        return false;
-    }
-
-	/**
+    /**
      * Apply paging. It's pretty straight forward except when the view is denormalised, because we don't know
      * how many rows would represent 1 feature.
      * @param query
@@ -819,11 +813,11 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                     getDataStore().encodeTableName(typeName, topIds, query.getHints());
                     // apply filter
                     if (filter != null) {
-                    	filterToSQL.setFieldEncoder(new JoiningFieldEncoder(typeName, getDataStore()));
-                    	if(isNestedFilter(filter)) {
-                    		topIds.append(" WHERE ").append(createNestedFilter(filter, query, filterToSQL));
+                        filterToSQL.setFieldEncoder(new JoiningFieldEncoder(typeName, getDataStore()));
+                        if (NestedFilterToSQL.isNestedFilter(filter, query.getRootMapping())) {
+                            topIds.append(" WHERE ").append(createNestedFilter(filter, query, filterToSQL));
                         } else {
-                        	topIds.append(" ").append(filterToSQL.encodeToString(filter));
+                            topIds.append(" ").append(filterToSQL.encodeToString(filter));
                         }
                         
                         //topIds.append(" ").append(filterToSQL.encodeToString(filter));

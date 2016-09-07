@@ -21,6 +21,7 @@ import java.util.List;
 
 import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.NestedAttributeMapping;
+import org.geotools.data.complex.config.AppSchemaDataAccessConfigurator;
 import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainedAttributeDescriptor;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.filter.FilterCapabilities;
@@ -150,21 +151,25 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         }
 
         List<Expression> matchingMappings = mappings.findMappingsFor(exprSteps, false);
-        for (NestedAttributeMapping mapping : mappings.getNestedMappings()) {
-            if (exprSteps.startsWith(mapping.getTargetXPath())) {
-                // verify that the feature chain can be known a priori
-                FeatureChainedAttributeVisitor nestedAttrExtractor = new FeatureChainedAttributeVisitor(
-                        mappings);
-                nestedAttrExtractor.visit(expression, null);
-                FeatureChainedAttributeDescriptor nestedAttrDescr = nestedAttrExtractor
-                        .getFeatureChainedAttribute();
-                if (nestedAttrDescr.chainSize() > 0 && nestedAttrDescr.isJoiningEnabled()) {
-                    nestedAttributes++;
 
-                    FeatureTypeMapping featureMapping = nestedAttrDescr
-                            .getFeatureTypeOwningAttribute();
-                    List<Expression> nestedMappings = featureMapping.findMappingsFor(
-                            nestedAttrDescr.getAttributePath(), false);
+        if (AppSchemaDataAccessConfigurator.shouldEncodeNestedFilters()) {
+            // check nested mappings
+            FeatureChainedAttributeVisitor nestedAttrExtractor = new FeatureChainedAttributeVisitor(
+                    mappings);
+            nestedAttrExtractor.visit(expression, null);
+            FeatureChainedAttributeDescriptor nestedAttrDescr = nestedAttrExtractor
+                    .getFeatureChainedAttribute();
+            if (nestedAttrDescr.chainSize() > 1 && nestedAttrDescr.isJoiningEnabled()) {
+                nestedAttributes++;
+
+                FeatureTypeMapping featureMapping = nestedAttrDescr.getFeatureTypeOwningAttribute();
+                List<Expression> nestedMappings = featureMapping.findMappingsFor(
+                        nestedAttrDescr.getAttributePath(), false);
+                if (nestedMappings != null && nestedMappings.size() > 0) {
+                    if (matchingMappings.size() == 1 && matchingMappings.get(0) == null) {
+                        // necessary to enable encoding of nested filters when joining simple content
+                        matchingMappings.remove(0);
+                    }
                     matchingMappings.addAll(nestedMappings);
                 }
             }
