@@ -19,6 +19,7 @@ package org.geotools.jdbc;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.geotools.data.complex.FeatureTypeMapping;
@@ -93,46 +94,50 @@ public class NestedFilterToSQL extends FilterToSQL {
 
             FeatureChainedAttributeVisitor nestedMappingsExtractor = new FeatureChainedAttributeVisitor(rootMapping);
             nestedMappingsExtractor.visit(ff.property(xpath), null);
-            FeatureChainedAttributeDescriptor nestedAttrDescr = nestedMappingsExtractor.getFeatureChainedAttribute();
+            List<FeatureChainedAttributeDescriptor> attributes = nestedMappingsExtractor.getFeatureChainedAttributes();
+            // encoding of filters on multiple nested attributes is not (yet) supported
+            if (attributes.size() == 1) {
+                FeatureChainedAttributeDescriptor nestedAttrDescr = attributes.get(0);
 
-            int numMappings = nestedAttrDescr.chainSize();
-            if (numMappings > 0 && nestedAttrDescr.isJoiningEnabled()) {
-                out.write("EXISTS (");
+                int numMappings = nestedAttrDescr.chainSize();
+                if (numMappings > 0 && nestedAttrDescr.isJoiningEnabled()) {
+                    out.write("EXISTS (");
 
-                FeatureChainLink lastMappingStep = nestedAttrDescr.getLastLink();
-                StringBuffer sql = encodeSelectKeyFrom(lastMappingStep);
+                    FeatureChainLink lastMappingStep = nestedAttrDescr.getLastLink();
+                    StringBuffer sql = encodeSelectKeyFrom(lastMappingStep);
 
-                for (int i = numMappings - 2; i > 0; i--) {
-                    FeatureChainLink mappingStep = nestedAttrDescr.getLink(i);
-                    if (mappingStep.hasNestedFeature()) {
-                        FeatureTypeMapping parentFeature = mappingStep.getFeatureTypeMapping();
-                        JDBCDataStore store = (JDBCDataStore) parentFeature.getSource()
-                                .getDataStore();
-                        String parentTableName = parentFeature.getSource().getSchema().getName()
-                                .getLocalPart();
+                    for (int i = numMappings - 2; i > 0; i--) {
+                        FeatureChainLink mappingStep = nestedAttrDescr.getLink(i);
+                        if (mappingStep.hasNestedFeature()) {
+                            FeatureTypeMapping parentFeature = mappingStep.getFeatureTypeMapping();
+                            JDBCDataStore store = (JDBCDataStore) parentFeature.getSource()
+                                    .getDataStore();
+                            String parentTableName = parentFeature.getSource().getSchema().getName()
+                                    .getLocalPart();
 
-                        sql.append(" INNER JOIN ");
-                        store.encodeTableName(parentTableName, sql, null);
-                        sql.append(" ");
-                        store.dialect.encodeTableName(mappingStep.getAlias(), sql);
-                        sql.append(" ON ");
-                        encodeJoinCondition(nestedAttrDescr, i, sql);
+                            sql.append(" INNER JOIN ");
+                            store.encodeTableName(parentTableName, sql, null);
+                            sql.append(" ");
+                            store.dialect.encodeTableName(mappingStep.getAlias(), sql);
+                            sql.append(" ON ");
+                            encodeJoinCondition(nestedAttrDescr, i, sql);
+                        }
                     }
+
+                    if (nestedAttrDescr.getAttributePath() != null) {
+                        createWhereClause(filter, xpath, nestedAttrDescr, sql);
+
+                        sql.append(" AND ");
+                    } else {
+                        sql.append(" WHERE ");
+                    }
+
+                    // join with root table
+                    encodeJoinCondition(nestedAttrDescr, 0, sql);
+
+                    out.write(sql.toString());
+                    out.write(")");
                 }
-
-                if (nestedAttrDescr.getAttributePath() != null) {
-                    createWhereClause(filter, xpath, nestedAttrDescr, sql);
-
-                    sql.append(" AND ");
-                } else {
-                    sql.append(" WHERE ");
-                }
-
-                // join with root table
-                encodeJoinCondition(nestedAttrDescr, 0, sql);
-
-                out.write(sql.toString());
-                out.write(")");
             }
 
             return extraData;
@@ -147,7 +152,7 @@ public class NestedFilterToSQL extends FilterToSQL {
     }
 
     private void encodeJoinCondition(FeatureChainedAttributeDescriptor nestedAttrDescr, int stepIdx,
-            StringBuffer sql) throws SQLException, IOException {
+            StringBuffer sql) throws SQLException, IOException, FilterToSQLException {
         FeatureChainLink parentStep = nestedAttrDescr.getLink(stepIdx);
         FeatureChainLink nestedStep = nestedAttrDescr.getLink(stepIdx + 1);
         FeatureTypeMapping parentFeature = parentStep.getFeatureTypeMapping();
@@ -155,15 +160,22 @@ public class NestedFilterToSQL extends FilterToSQL {
         NestedAttributeMapping nestedFeatureAttr = parentStep.getNestedFeatureAttribute();
         FeatureTypeMapping nestedFeature = nestedFeatureAttr.getFeatureTypeMapping(null);
 
+        SimpleFeatureType parentSource = (SimpleFeatureType) parentFeature.getSource().getSchema();
         String parentTableName = parentFeature.getSource().getSchema().getName().getLocalPart();
         String parentTableAlias = parentStep.getAlias();
-        // TODO: what if source expression is not a literal?
-        String parentTableColumn = nestedFeatureAttr.getSourceExpression().toString();
-        // String nestedTableName = nestedFeature.getSource().getSchema().getName().getLocalPart();
+        FilterToSQL parentToSQL = createFilterToSQL(store, parentSource);
+        // don't escape, as it will be done by the encodeColumn methods
+        parentToSQL.setSqlNameEscape("");
+        Expression parentExpression = nestedFeatureAttr.getSourceExpression();
+        String parentTableColumn = parentToSQL.encodeToString(parentExpression);
+
+        SimpleFeatureType nestedSource = (SimpleFeatureType) parentFeature.getSource().getSchema();
         String nestedTableAlias = nestedStep.getAlias();
-        // TODO: what if source expression is not a literal?
-        String nestedTableColumn = nestedFeatureAttr.getMapping(nestedFeature)
-                .getSourceExpression().toString();
+        FilterToSQL nestedFilterToSQL = createFilterToSQL(store, nestedSource);
+        // don't escape, as it will be done by the encodeColumn methods
+        nestedFilterToSQL.setSqlNameEscape("");
+        Expression nestedExpr = nestedFeatureAttr.getMapping(nestedFeature).getSourceExpression();
+        String nestedTableColumn = nestedFilterToSQL.encodeToString(nestedExpr);
 
         if (stepIdx == 0) {
             encodeColumnName(store, parentTableColumn, parentTableName, sql, null);
@@ -224,18 +236,23 @@ public class NestedFilterToSQL extends FilterToSQL {
         Filter unrolled = unrollFilter(duplicated, featureMappingForUnrolling);
 
         JoiningFieldEncoder fieldEncoder = new JoiningFieldEncoder(lastLink.getAlias(), store);
-        FilterToSQL nestedFilterToSQL = null;
+        FilterToSQL filterToSQL = createFilterToSQL(store, sourceType);
+        filterToSQL.setFieldEncoder(fieldEncoder);
+        String encodedFilter = filterToSQL.encodeToString(unrolled);
+        sql.append(" ").append(encodedFilter);
+    }
+
+    private FilterToSQL createFilterToSQL(JDBCDataStore store, SimpleFeatureType sourceType) {
+        FilterToSQL filterToSQL = null;
         if (store.getSQLDialect() instanceof PreparedStatementSQLDialect ) {
             PreparedFilterToSQL preparedFilterToSQL = store.createPreparedFilterToSQL(sourceType);
             // disable prepared statements to have literals actually encoded in the SQL
             preparedFilterToSQL.setPrepareEnabled(false);
-            nestedFilterToSQL = preparedFilterToSQL;
+            filterToSQL = preparedFilterToSQL;
         } else {
-            nestedFilterToSQL = store.createFilterToSQL(sourceType);
+            filterToSQL = store.createFilterToSQL(sourceType);
         }
-        nestedFilterToSQL.setFieldEncoder(fieldEncoder);
-        String encodedFilter = nestedFilterToSQL.encodeToString(unrolled);
-        sql.append(" ").append(encodedFilter);
+        return filterToSQL;
     }
 
     private void encodeColumnName(JDBCDataStore store, String colName, String typeName,
@@ -346,6 +363,11 @@ public class NestedFilterToSQL extends FilterToSQL {
     }
 
     private static boolean hasNestedAttributes(String[] xpaths, FeatureTypeMapping rootMapping) {
+        return extractNestedAttributes(xpaths, rootMapping).size() > 0;
+    }
+
+    private static List<FeatureChainedAttributeDescriptor> extractNestedAttributes(String[] xpaths, FeatureTypeMapping rootMapping) {
+        List<FeatureChainedAttributeDescriptor> nestedAttributes = new ArrayList<>();
         FilterFactoryImplNamespaceAware ff = new FilterFactoryImplNamespaceAware();
         FeatureChainedAttributeVisitor v = new FeatureChainedAttributeVisitor(rootMapping);
         for (String xpath : xpaths) {
@@ -353,12 +375,14 @@ public class NestedFilterToSQL extends FilterToSQL {
                 continue;
             }
             v.visit(ff.property(xpath, rootMapping.getNamespaces()), null);
-            FeatureChainedAttributeDescriptor attrDescr = v.getFeatureChainedAttribute();
-            if (attrDescr.chainSize() > 1) {
-                return true;
+            List<FeatureChainedAttributeDescriptor> attributes = v.getFeatureChainedAttributes();
+            for (FeatureChainedAttributeDescriptor attrDescr: attributes) {
+                if (attrDescr.chainSize() > 1) {
+                    nestedAttributes.add(attrDescr);
+                }
             }
         }
-        return false;
+        return nestedAttributes;
     }
 
     private String[] getAttributesXPath(Filter filter) {

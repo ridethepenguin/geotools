@@ -17,15 +17,20 @@
 
 package org.geotools.data.complex.filter;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.logging.Logger;
 
 import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.NestedAttributeMapping;
 import org.geotools.data.complex.config.AppSchemaDataAccessConfigurator;
+import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainLink;
 import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainedAttributeDescriptor;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
+import org.geotools.jdbc.JDBCDataStore;
+import org.geotools.util.logging.Logging;
 import org.opengis.filter.BinaryComparisonOperator;
 import org.opengis.filter.Id;
 import org.opengis.filter.expression.Add;
@@ -39,6 +44,7 @@ import org.opengis.filter.expression.Multiply;
 import org.opengis.filter.expression.NilExpression;
 import org.opengis.filter.expression.PropertyName;
 import org.opengis.filter.expression.Subtract;
+import org.opengis.filter.spatial.BinarySpatialOperator;
 
 /**
  * @author Niels Charlier (Curtin University of Technology)
@@ -46,8 +52,11 @@ import org.opengis.filter.expression.Subtract;
  * @source $URL$
  */
 public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor {
-	private int nestedAttributes = 0; 
-	
+
+    private static final Logger LOGGER = Logging.getLogger(ComplexFilterSplitter.class);
+
+    private int nestedAttributes = 0;
+
     public class CapabilitiesExpressionVisitor implements ExpressionVisitor {
         
         protected boolean capable = true;
@@ -128,7 +137,22 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         
         return null;
     }
-    
+
+    // encoding of nested filters if used as function arguments is not supported
+    @Override
+    public Object visit(Function expression, Object notUsed) {
+        nestedAttributes = 0;
+        int i = preStack.size();
+
+        Object data = super.visit(expression, notUsed);
+        if (nestedAttributes > 0 && preStack.size() == i + 1) {
+            Object o = preStack.pop();
+            postStack.push(o);
+        }
+        return data;
+    }
+
+    // encoding multiple nested filters is not supported
     @Override
     protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
         nestedAttributes = 0;
@@ -139,7 +163,29 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
             postStack.push(o);
         }
     }
-    
+
+    @Override
+    protected void visitBinarySpatialOperator(BinarySpatialOperator filter) {
+        nestedAttributes = 0;
+        int i = preStack.size();
+        super.visitBinarySpatialOperator(filter);
+        if (nestedAttributes > 1 && preStack.size() == i + 1) {
+            Object o = preStack.pop();
+            postStack.push(o);
+        }
+    }
+
+    @Override
+    protected void visitMathExpression(BinaryExpression expression) {
+        nestedAttributes = 0;
+        int i = preStack.size();
+        super.visitMathExpression(expression);
+        if (nestedAttributes > 1 && preStack.size() == i + 1) {
+            Object o = preStack.pop();
+            postStack.push(o);
+        }
+    }
+
     public Object visit(PropertyName expression, Object notUsed) {
         
         // break into single steps
@@ -157,20 +203,49 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
             FeatureChainedAttributeVisitor nestedAttrExtractor = new FeatureChainedAttributeVisitor(
                     mappings);
             nestedAttrExtractor.visit(expression, null);
-            FeatureChainedAttributeDescriptor nestedAttrDescr = nestedAttrExtractor
-                    .getFeatureChainedAttribute();
-            if (nestedAttrDescr.chainSize() > 1 && nestedAttrDescr.isJoiningEnabled()) {
-                nestedAttributes++;
+            List<FeatureChainedAttributeDescriptor> attributes = nestedAttrExtractor
+                    .getFeatureChainedAttributes();
+            // encoding of filters on multiple nested attributes is not (yet) supported
+            if (attributes.size() == 1) {
+                FeatureChainedAttributeDescriptor nestedAttrDescr = attributes.get(0);
+                if (nestedAttrDescr.chainSize() > 1 && nestedAttrDescr.isJoiningEnabled()) {
+                    nestedAttributes++;
 
-                FeatureTypeMapping featureMapping = nestedAttrDescr.getFeatureTypeOwningAttribute();
-                List<Expression> nestedMappings = featureMapping.findMappingsFor(
-                        nestedAttrDescr.getAttributePath(), false);
-                if (nestedMappings != null && nestedMappings.size() > 0) {
-                    if (matchingMappings.size() == 1 && matchingMappings.get(0) == null) {
-                        // necessary to enable encoding of nested filters when joining simple content
-                        matchingMappings.remove(0);
+                    FeatureTypeMapping featureMapping = nestedAttrDescr.getFeatureTypeOwningAttribute();
+
+                    // add source expressions for target attribute
+                    List<Expression> nestedMappings = featureMapping.findMappingsFor(
+                            nestedAttrDescr.getAttributePath(), false);
+                    if (nestedMappings != null && nestedMappings.size() > 0) {
+                        if (matchingMappings.size() == 1 && matchingMappings.get(0) == null) {
+                            // necessary to enable encoding of nested filters when joining simple content
+                            matchingMappings.remove(0);
+                        }
+                        matchingMappings.addAll(nestedMappings);
                     }
-                    matchingMappings.addAll(nestedMappings);
+
+                    // also add source expressions for mappings used in join conditions, as they also
+                    // must be encoded
+                    for (int i = nestedAttrDescr.chainSize() - 2; i > 0; i--) {
+                        FeatureChainLink mappingStep = nestedAttrDescr.getLink(i);
+                        if (mappingStep.hasNestedFeature()) {
+                            FeatureChainLink parentStep = nestedAttrDescr.getLink(i);
+
+                            NestedAttributeMapping nestedAttr = parentStep.getNestedFeatureAttribute();
+                            FeatureTypeMapping nestedFeature = null;
+                            try {
+                                nestedFeature = nestedAttr.getFeatureTypeMapping(null);
+                            } catch (IOException e) {
+                                LOGGER.warning("Exception occurred processing nested filter, encoding"
+                                        + "will be disabled: " + e.getMessage());
+                                postStack.push(expression);
+                                return null;
+                            }
+
+                            Expression nestedExpr = nestedAttr.getMapping(nestedFeature).getSourceExpression();
+                            matchingMappings.add(nestedExpr);
+                        }
+                    }
                 }
             }
         }
