@@ -197,18 +197,20 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         nestedAttributes = 0;
         int i = preStack.size();
         if (filter.getExpression1() instanceof PropertyName) {
-            Object ret = this.visit((PropertyName)filter.getExpression1(), notUsed);
-            if (preStack.size() == i+1) {
-                preStack.pop();
+            PropertyName bboxProperty = (PropertyName)filter.getExpression1();
+            if (!bboxProperty.getPropertyName().isEmpty()) {
+                Object ret = this.visit(bboxProperty, notUsed);
+                if (preStack.size() == i+1) {
+                    preStack.pop();
+                }
+                // encoding bbox on nested geometry is not supported
+                if (nestedAttributes > 0) {
+                    postStack.push(filter);
+                    return ret;
+                }
             }
-            // encoding bbox on nested geometry is not supported
-            if (nestedAttributes > 0) {
-                postStack.push(filter);
-            }
-            return ret;
-        } else {
-            return super.visit(filter, notUsed);
         }
+        return super.visit(filter, notUsed);
     }
 
     @Override
