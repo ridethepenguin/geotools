@@ -116,7 +116,7 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
         for (NestedAttributeMapping nestedAttr : currentAttributes) {
             StepList targetXPath = nestedAttr.getTargetXPath();
 
-            if (startsWith(currentXPath, targetXPath)) {
+            if (currentXPath.startsWith(targetXPath)) {
                 if (nestedAttr.isConditional() && feature == null) {
                     LOGGER.fine("Conditional nested mapping found, but no feature to evaluate "
                             + "against was provided: nested feature type cannot be determined");
@@ -209,26 +209,6 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
                     // search was successful, add attribute to collection
                     attributes.add(attrDescr);
                 }
-            }
-        }
-    }
-
-    private boolean startsWith(StepList xpath, StepList targetXPath) {
-        if (!xpath.startsWith(targetXPath)) {
-            return false;
-        } else {
-            // ignoring the indexes, the paths are the same; now I must compare the index of the last
-            // step in the target path with that of the matching step in the query xpath
-            Step targetXPathLastStep = targetXPath.get(targetXPath.size() - 1);
-            Step xpathStep = xpath.get(targetXPath.size() - 1);
-            if (targetXPathLastStep.isIndexed()) {
-                if (xpathStep.isIndexed()) {
-                    return targetXPathLastStep.equals(xpathStep);
-                } else {
-                    return true;
-                }
-            } else {
-                return true;
             }
         }
     }
