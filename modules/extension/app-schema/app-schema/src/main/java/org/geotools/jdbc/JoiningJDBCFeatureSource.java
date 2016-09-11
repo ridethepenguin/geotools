@@ -601,7 +601,7 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                              // if (i < lastSortBy.length-1) sortBySQL.append(",");
                              sortBySQL.append(" FROM ");
                              getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints()); 
-                             if(NestedFilterToSQL.isNestedFilter(filter, query.getRootMapping())) {
+                             if(NestedFilterToSQL.isNestedFilter(filter)) {
                             	 sortBySQL.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
                              } else {
                             	 sortBySQL.append(" ").append(toSQL.encodeToString(filter));
@@ -655,7 +655,7 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                     }
                 } else if (!pagingApplied) {
                     toSQL.setFieldEncoder(new JoiningFieldEncoder(curTypeName, getDataStore()));
-                    if(NestedFilterToSQL.isNestedFilter(filter, query.getRootMapping())) {
+                    if(NestedFilterToSQL.isNestedFilter(filter)) {
                    	 	sql.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
                     } else {
                     	sql.append(" ").append(toSQL.encodeToString(filter));
@@ -814,7 +814,7 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                     // apply filter
                     if (filter != null) {
                         filterToSQL.setFieldEncoder(new JoiningFieldEncoder(typeName, getDataStore()));
-                        if (NestedFilterToSQL.isNestedFilter(filter, query.getRootMapping())) {
+                        if (NestedFilterToSQL.isNestedFilter(filter)) {
                             topIds.append(" WHERE ").append(createNestedFilter(filter, query, filterToSQL));
                         } else {
                             topIds.append(" ").append(filterToSQL.encodeToString(filter));

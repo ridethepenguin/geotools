@@ -18,6 +18,7 @@
 package org.geotools.data.complex.filter;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -33,6 +34,8 @@ import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.util.logging.Logging;
 import org.opengis.filter.BinaryComparisonOperator;
 import org.opengis.filter.Id;
+import org.opengis.filter.PropertyIsBetween;
+import org.opengis.filter.PropertyIsLike;
 import org.opengis.filter.expression.Add;
 import org.opengis.filter.expression.BinaryExpression;
 import org.opengis.filter.expression.Divide;
@@ -44,7 +47,9 @@ import org.opengis.filter.expression.Multiply;
 import org.opengis.filter.expression.NilExpression;
 import org.opengis.filter.expression.PropertyName;
 import org.opengis.filter.expression.Subtract;
+import org.opengis.filter.spatial.BBOX;
 import org.opengis.filter.spatial.BinarySpatialOperator;
+import org.opengis.filter.temporal.BinaryTemporalOperator;
 
 /**
  * @author Niels Charlier (Curtin University of Technology)
@@ -125,7 +130,6 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
     }
     
     public Object visit(Id filter, Object notUsed) {
-        
         CapabilitiesExpressionVisitor visitor = new CapabilitiesExpressionVisitor();
         mappings.getFeatureIdExpression().accept(visitor, null);
         
@@ -138,13 +142,12 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         return null;
     }
 
-    // encoding of nested filters if used as function arguments is not supported
     @Override
     public Object visit(Function expression, Object notUsed) {
         nestedAttributes = 0;
         int i = preStack.size();
-
         Object data = super.visit(expression, notUsed);
+        // encoding of functions with nested attributes as  arguments is not supported
         if (nestedAttributes > 0 && preStack.size() == i + 1) {
             Object o = preStack.pop();
             postStack.push(o);
@@ -152,27 +155,29 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         return data;
     }
 
-    // encoding multiple nested filters is not supported
     @Override
-    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
+    protected void visitBinarySpatialOperator(BinarySpatialOperator filter) {
         nestedAttributes = 0;
         int i = preStack.size();
-        super.visitBinaryComparisonOperator(filter);
-        if (nestedAttributes > 1 && preStack.size() == i + 1) {
+        super.visitBinarySpatialOperator(filter);
+        // encoding of binary spatial operators operating on nested attributes is not supported
+        if (nestedAttributes > 0 && preStack.size() == i + 1) {
             Object o = preStack.pop();
             postStack.push(o);
         }
     }
 
     @Override
-    protected void visitBinarySpatialOperator(BinarySpatialOperator filter) {
+    protected Object visit(BinaryTemporalOperator filter, Object data) {
         nestedAttributes = 0;
         int i = preStack.size();
-        super.visitBinarySpatialOperator(filter);
-        if (nestedAttributes > 1 && preStack.size() == i + 1) {
+        Object ret = super.visit(filter, data);
+        // encoding of temporal operators involving nested attributes is not supported
+        if (nestedAttributes > 0 && preStack.size() == i + 1) {
             Object o = preStack.pop();
             postStack.push(o);
         }
+        return ret;
     }
 
     @Override
@@ -180,10 +185,68 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         nestedAttributes = 0;
         int i = preStack.size();
         super.visitMathExpression(expression);
+        // encoding of math expressions involving nested attributes is not supported
+        if (nestedAttributes > 0 && preStack.size() == i + 1) {
+            Object o = preStack.pop();
+            postStack.push(o);
+        }
+    }
+
+    @Override
+    public Object visit(BBOX filter, Object notUsed) {
+        nestedAttributes = 0;
+        int i = preStack.size();
+        if (filter.getExpression1() instanceof PropertyName) {
+            Object ret = this.visit((PropertyName)filter.getExpression1(), notUsed);
+            if (preStack.size() == i+1) {
+                preStack.pop();
+            }
+            // encoding bbox on nested geometry is not supported
+            if (nestedAttributes > 0) {
+                postStack.push(filter);
+            }
+            return ret;
+        } else {
+            return super.visit(filter, notUsed);
+        }
+    }
+
+    @Override
+    protected void visitBinaryComparisonOperator(BinaryComparisonOperator filter) {
+        nestedAttributes = 0;
+        int i = preStack.size();
+        super.visitBinaryComparisonOperator(filter);
+        // encoding a comparison between multiple nested attributes is not supported
         if (nestedAttributes > 1 && preStack.size() == i + 1) {
             Object o = preStack.pop();
             postStack.push(o);
         }
+    }
+
+    @Override
+    public Object visit(PropertyIsBetween filter, Object extradata) {
+        nestedAttributes = 0;
+        int i = preStack.size();
+        Object ret = super.visit(filter, extradata);
+        // encoding a comparison between multiple nested attributes is not supported
+        if (nestedAttributes > 1 && preStack.size() == i + 1) {
+            Object o = preStack.pop();
+            postStack.push(o);
+        }
+        return ret;
+    }
+
+    @Override
+    public Object visit(PropertyIsLike filter, Object notUsed) {
+        nestedAttributes = 0;
+        int i = preStack.size();
+        Object ret = super.visit(filter, notUsed);
+        // encoding a comparison between multiple nested attributes is not supported
+        if (nestedAttributes > 1 && preStack.size() == i + 1) {
+            Object o = preStack.pop();
+            postStack.push(o);
+        }
+        return ret;
     }
 
     public Object visit(PropertyName expression, Object notUsed) {
@@ -216,13 +279,14 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
                     // add source expressions for target attribute
                     List<Expression> nestedMappings = featureMapping.findMappingsFor(
                             nestedAttrDescr.getAttributePath(), false);
-                    if (nestedMappings != null && nestedMappings.size() > 0) {
-                        if (matchingMappings.size() == 1 && matchingMappings.get(0) == null) {
+                    Iterator<Expression> it = matchingMappings.iterator();
+                    while (it.hasNext()) {
+                        if (it.next() == null) {
                             // necessary to enable encoding of nested filters when joining simple content
-                            matchingMappings.remove(0);
+                            it.remove();
                         }
-                        matchingMappings.addAll(nestedMappings);
                     }
+                    matchingMappings.addAll(nestedMappings);
 
                     // also add source expressions for mappings used in join conditions, as they also
                     // must be encoded

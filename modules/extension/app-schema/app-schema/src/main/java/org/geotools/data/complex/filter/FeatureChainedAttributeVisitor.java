@@ -82,10 +82,10 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
         if (expression == null) {
             throw new NullPointerException("expression is null");
         }
+        Feature feature = null;
         if (data != null && !(data instanceof Feature)) {
-            throw new IllegalArgumentException("data must be a Feature object");
+            feature = (Feature) data;
         }
-        Feature feature = (Feature) data;
 
         // reset outcome of the visit
 //        chainedAttribute = new FeatureChainedAttributeDescriptor();

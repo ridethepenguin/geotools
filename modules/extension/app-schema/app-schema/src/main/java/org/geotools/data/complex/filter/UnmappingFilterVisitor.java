@@ -818,10 +818,13 @@ public class UnmappingFilterVisitor implements org.opengis.filter.FilterVisitor,
         StepList simplifiedSteps = XPath.steps(root, targetXPath, namespaces);
 
         List<Expression> matchingMappings = mappings.findMappingsFor(simplifiedSteps, false);
-        if (matchingMappings.size() == 1 && matchingMappings.get(0) == null) {
-            // remove spurious null value, which is returned by findMappingsFor only to notify
-            // the caller that joining for simple content should go to the post filter
-            matchingMappings.remove(0);
+        Iterator<Expression> it = matchingMappings.iterator();
+        while (it.hasNext()) {
+            if (it.next() == null) {
+                // remove spurious null values, which are returned by findMappingsFor only to notify
+                // the caller that joining for simple content should go to the post filter
+                it.remove();
+            }
         }
 
         if (!nestedMappings.isEmpty()) {

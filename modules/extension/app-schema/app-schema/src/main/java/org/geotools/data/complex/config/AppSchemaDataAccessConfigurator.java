@@ -134,10 +134,8 @@ public class AppSchemaDataAccessConfigurator {
     }
 
     public static boolean shouldEncodeNestedFilters() {
-        // TODO: make this dependent on system property
-//        String propValue = AppSchemaDataAccessRegistry.getAppSchemaProperties().getProperty(PROPERTY_ENCODE_NESTED_FILTERS);
-//        return propValue != null && propValue.equalsIgnoreCase("true");
-        return true;
+        String propValue = AppSchemaDataAccessRegistry.getAppSchemaProperties().getProperty(PROPERTY_ENCODE_NESTED_FILTERS);
+        return propValue == null || propValue.equalsIgnoreCase("true");
     }
 
     /**
