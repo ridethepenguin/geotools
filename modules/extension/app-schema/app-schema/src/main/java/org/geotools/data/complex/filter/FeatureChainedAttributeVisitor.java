@@ -31,7 +31,6 @@ import org.geotools.data.complex.config.Types;
 import org.geotools.data.complex.filter.XPathUtil.Step;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.data.joining.JoiningNestedAttributeMapping;
-import org.geotools.feature.visitor.FeatureAttributeVisitor;
 import org.geotools.filter.visitor.DefaultExpressionVisitor;
 import org.geotools.util.logging.Logging;
 import org.geotools.xlink.XLINK;
@@ -64,15 +63,12 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
 
     private FeatureTypeMapping rootMapping;
 
-    private FeatureChainedAttributeDescriptor chainedAttribute;
-
     private List<FeatureChainedAttributeDescriptor> attributes;
 
     public FeatureChainedAttributeVisitor(FeatureTypeMapping root) {
         if (root == null) {
             throw new NullPointerException("root mapping is null");
         }
-        this.chainedAttribute = new FeatureChainedAttributeDescriptor();
         this.attributes = new ArrayList<>();
         this.rootMapping = root;
     }
@@ -88,7 +84,6 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
         }
 
         // reset outcome of the visit
-//        chainedAttribute = new FeatureChainedAttributeDescriptor();
         attributes = new ArrayList<>();
 
         try {

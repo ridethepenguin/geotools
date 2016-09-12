@@ -80,6 +80,8 @@ public class JoiningQuery extends Query {
     
     protected List<String> ids; 
     
+    FeatureTypeMapping rootMapping;
+
     public JoiningQuery(JoiningQuery query) {
         super(query);
         setQueryJoins(query.getQueryJoins());
@@ -135,14 +137,12 @@ public class JoiningQuery extends Query {
     public void setDenormalised(boolean isDenormalised) {
         this.isDenormalised = isDenormalised;
     }
-    
-    FeatureTypeMapping rootMapping;
 
-	public FeatureTypeMapping getRootMapping() {
-		return rootMapping;
-	}
+    public FeatureTypeMapping getRootMapping() {
+        return rootMapping;
+    }
 
-	public void setRootMapping(FeatureTypeMapping rootMapping) {
-		this.rootMapping = rootMapping;
-	}
+    public void setRootMapping(FeatureTypeMapping rootMapping) {
+        this.rootMapping = rootMapping;
+    }
 }

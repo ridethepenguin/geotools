@@ -214,14 +214,15 @@ public abstract class AbstractMappingFeatureIterator implements IMappingFeatureI
             this.requestMaxFeatures = query.getMaxFeatures();
             this.dataMaxFeatures = query.getMaxFeatures();
         }
-                
-        if (unrolledQuery==null) {
+
+        if (unrolledQuery == null) {
             unrolledQuery = getUnrolledQuery(query);
-            if(query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
-            	 ((JoiningQuery)unrolledQuery).setRootMapping(((JoiningQuery)query).getRootMapping());
+            if (query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
+                ((JoiningQuery) unrolledQuery).setRootMapping(((JoiningQuery) query)
+                        .getRootMapping());
             }
-        }       
-        
+        }
+
          // NC - property names
         if (query != null && query.getProperties() != null) {
             setPropertyNames(query.getProperties());

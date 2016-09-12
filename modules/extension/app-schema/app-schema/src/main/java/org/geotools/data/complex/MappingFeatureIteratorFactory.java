@@ -18,9 +18,7 @@
 package org.geotools.data.complex;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Logger;
 
 import org.geotools.data.FeatureSource;
@@ -30,12 +28,10 @@ import org.geotools.data.complex.config.Types;
 import org.geotools.data.complex.filter.ComplexFilterSplitter;
 import org.geotools.data.complex.filter.XPath;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
-import org.geotools.data.joining.JoiningNestedAttributeMapping;
 import org.geotools.data.joining.JoiningQuery;
 import org.geotools.filter.FilterAttributeExtractor;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.filter.visitor.DefaultFilterVisitor;
-import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
 import org.geotools.jdbc.JDBCFeatureSource;
 import org.geotools.jdbc.JDBCFeatureStore;
 import org.opengis.feature.type.AttributeDescriptor;
@@ -112,24 +108,24 @@ public class MappingFeatureIteratorFactory {
 
         if (mapping instanceof XmlFeatureTypeMapping) {
             return new XmlMappingFeatureIterator(store, mapping, query);
-        }        
+        }
 
         boolean isJoining = AppSchemaDataAccessConfigurator.isJoining();
         boolean removeQueryLimitIfDenormalised = false;
 
-        FeatureSource mappedSource = mapping.getSource();            
-        
-        if (isJoining && !(mappedSource instanceof JDBCFeatureSource
-                || mappedSource instanceof JDBCFeatureStore)) {
-        	// check if joining is explicitly set for non database backends
-        	if (AppSchemaDataAccessConfigurator.isJoiningSet()) {
-        		throw new IllegalArgumentException(
-                        "Joining queries are only supported on JDBC data stores");	
-        	} else {
-        		// override default behaviour
-        		// this is not intended
-        		isJoining = false;
-        	}
+        FeatureSource mappedSource = mapping.getSource();
+
+        if (isJoining
+                && !(mappedSource instanceof JDBCFeatureSource || mappedSource instanceof JDBCFeatureStore)) {
+            // check if joining is explicitly set for non database backends
+            if (AppSchemaDataAccessConfigurator.isJoiningSet()) {
+                throw new IllegalArgumentException(
+                        "Joining queries are only supported on JDBC data stores");
+            } else {
+                // override default behaviour
+                // this is not intended
+                isJoining = false;
+            }
         }
 
         if (isJoining) {
@@ -145,7 +141,6 @@ public class MappingFeatureIteratorFactory {
                     }
                 }
                 ((JoiningQuery) query).setRootMapping(mapping);
-
             }
         }
         IMappingFeatureIterator iterator;
@@ -155,8 +150,9 @@ public class MappingFeatureIteratorFactory {
             query.setFilter(Filter.INCLUDE);
             Query unrolledQuery = store.unrollQuery(query, mapping);
             unrolledQuery.setFilter(unrolledFilter);
-            if(query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
-            	 ((JoiningQuery)unrolledQuery).setRootMapping(((JoiningQuery)query).getRootMapping());
+            if (query instanceof JoiningQuery && unrolledQuery instanceof JoiningQuery) {
+                ((JoiningQuery) unrolledQuery).setRootMapping(((JoiningQuery) query)
+                        .getRootMapping());
             }
             if (isSimpleType(mapping)) {
                 iterator = new MappingAttributeIterator(store, mapping, query, unrolledQuery);

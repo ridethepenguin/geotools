@@ -54,6 +54,37 @@ import org.opengis.filter.expression.Expression;
 import org.opengis.filter.expression.PropertyName;
 import org.xml.sax.helpers.NamespaceSupport;
 
+/**
+ * {@link FilterToSQL} decorator capable of encoding filters on nested attributes.
+ * 
+ * <p>
+ * Currently, the filters that can be translated to SQL are:
+ * <ul>
+ * <li>PropertyIsEqualTo>
+ * <li>PropertyIsNotEqualTo</li>
+ * <li>PropertyIsLessThan</li>
+ * <li>PropertyIsLessThanOrEqualTo</li>
+ * <li>PropertyIsGreaterThan</li>
+ * <li>PropertyIsGreaterThanOrEqualTo</li>
+ * <li>PropertyIsLike</li>
+ * <li>PropertyIsNull</li>
+ * <li>PropertyIsBetween</li>
+ * </ul>
+ * </p>
+ * 
+ * <p>
+ * Note that, in order to be successfully encoded, the filter must not involve more than one nested attribute (i.e. comparing nested attributes is not
+ * supported), nor attributes that are chained via polymorphic mappings.
+ * </p>
+ * 
+ * <p>
+ * If the visited filter does not involve nested attributes, its encoding is delegated to the wrapped {@link FilterToSQL} instance.
+ * </p>
+ * 
+ * @author Mauro Bartolomeoli, GeoSolutions
+ * @author Stefano Costa, GeoSolutions
+ *
+ */
 public class NestedFilterToSQL extends FilterToSQL {
     FeatureTypeMapping rootMapping;
 
@@ -350,6 +381,16 @@ public class NestedFilterToSQL extends FilterToSQL {
         return visitBinaryComparison(filter, extraData, nestedAttr.getPropertyName());
     }
 
+    /**
+     * A filter is considered <em>nested</em> if it operates on at least one nested attribute.
+     * 
+     * <p>
+     * Technically, this means that at least one of the expressions in it is an instance of {@link NestedAttributeExpression}.
+     * </p>
+     * 
+     * @param filter the filter to test
+     * @return <code>true</code> if the filter involves at least one nested attribute, <code>false</code> otherwise
+     */
     public static boolean isNestedFilter(Filter filter) {
         FilterAttributeExtractor extractor = new FilterAttributeExtractor();
         filter.accept(extractor, null);

@@ -2,7 +2,7 @@
  *    GeoTools - The Open Source Java GIS Toolkit
  *    http://geotools.org
  *
- *    (C) 2011-2016, Open Source Geospatial Foundation (OSGeo)
+ *    (C) 2011, Open Source Geospatial Foundation (OSGeo)
  *
  *    This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -35,9 +35,6 @@ import java.util.logging.Logger;
 import org.geotools.data.FeatureReader;
 import org.geotools.data.Query;
 import org.geotools.data.Transaction;
-import org.geotools.data.complex.FeatureTypeMapping;
-import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor;
-import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureChainedAttributeDescriptor;
 import org.geotools.data.jdbc.FilterToSQL;
 import org.geotools.data.jdbc.FilterToSQLException;
 import org.geotools.data.joining.JoiningQuery;
@@ -46,8 +43,6 @@ import org.geotools.factory.Hints;
 import org.geotools.feature.AttributeTypeBuilder;
 import org.geotools.feature.NameImpl;
 import org.geotools.feature.simple.SimpleFeatureTypeBuilder;
-import org.geotools.filter.FilterAttributeExtractor;
-import org.geotools.filter.FilterFactoryImplNamespaceAware;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
 import org.geotools.filter.visitor.SimplifyingFilterVisitor;
 import org.geotools.util.logging.Logging;
@@ -92,7 +87,7 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
     }
 
     /**
-     * Field Encoder for converting Filters/Expressions to SQL, will encode table name with field 
+     * Field Encoder for converting Filters/Expressions to SQL, will encode table name with field.
      *
      */
     public static class JoiningFieldEncoder implements FilterToSQL.FieldEncoder {
@@ -105,6 +100,13 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
             this.store = store;
         }
         
+        /**
+         * Encodes a field name in SQL, prefixing it with the table name (but not the schema).
+         * 
+         * <p>
+         * Mostly useful when aliases are used.
+         * </p>
+         */
         public String encode(String s) {
            StringBuffer buf = new StringBuffer();
            store.dialect.encodeTableName(tableName, buf);           
@@ -594,30 +596,27 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                     StringBuffer sortBySQL = new StringBuffer();
                     sortBySQL.append(" INNER JOIN ( SELECT DISTINCT ");
                     boolean hasSortBy = false;
-                    for (int i=0; i < lastSortBy.length; i++) {
-                        if (!ids.contains(lastSortBy[i].getPropertyName().toString())) { 
-                             // skip if inner join is already done in paging
-                             getDataStore().dialect.encodeColumnName(null, lastSortBy[i].getPropertyName().getPropertyName(), sortBySQL);
-                             // if (i < lastSortBy.length-1) sortBySQL.append(",");
-                             sortBySQL.append(" FROM ");
-                             getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints()); 
-                             if(NestedFilterToSQL.isNestedFilter(filter)) {
-                            	 sortBySQL.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
-                             } else {
-                            	 sortBySQL.append(" ").append(toSQL.encodeToString(filter));
-                             }
-                             
-                             //sortBySQL.append(" ").append("WHERE EXISTS (SELECT \"gml_id\" FROM \"sipra\".\"t_denorm_sede\" WHERE \"sipra\".\"t_denorm_sede\".\"comune\" = 'Bagnasco' AND \"sipra\".\"t_denorm_sede\".\"id_istanza\" = \"sipra\".\"t_aua\".\"id_istanza\")");
-                             sortBySQL.append(" ) ");
-                             getDataStore().dialect.encodeTableName(TEMP_FILTER_ALIAS, sortBySQL);
-                             sortBySQL.append(" ON ( ");
-                             encodeColumnName2(lastSortBy[i].getPropertyName().getPropertyName(), lastTableAlias , sortBySQL, null);            
-                             sortBySQL.append(" = ");
-                             encodeColumnName2(lastSortBy[i].getPropertyName().getPropertyName(), TEMP_FILTER_ALIAS , sortBySQL, null);
-                             if (i < lastSortBy.length-1) {
-                                 sortBySQL.append(" AND ");                             
-                             } 
-                             hasSortBy = true;
+                    for (int i = 0; i < lastSortBy.length; i++) {
+                        if (!ids.contains(lastSortBy[i].getPropertyName().toString())) {
+                            // skip if inner join is already done in paging
+                            getDataStore().dialect.encodeColumnName(null, lastSortBy[i].getPropertyName().getPropertyName(), sortBySQL);
+                            sortBySQL.append(" FROM ");
+                            getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints());
+                            if (NestedFilterToSQL.isNestedFilter(filter)) {
+                                sortBySQL.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
+                            } else {
+                                sortBySQL.append(" ").append(toSQL.encodeToString(filter));
+                            }
+                            sortBySQL.append(" ) ");
+                            getDataStore().dialect.encodeTableName(TEMP_FILTER_ALIAS, sortBySQL);
+                            sortBySQL.append(" ON ( ");
+                            encodeColumnName2(lastSortBy[i].getPropertyName().getPropertyName(), lastTableAlias, sortBySQL, null);
+                            sortBySQL.append(" = ");
+                            encodeColumnName2(lastSortBy[i].getPropertyName().getPropertyName(), TEMP_FILTER_ALIAS, sortBySQL, null);
+                            if (i < lastSortBy.length - 1) {
+                                sortBySQL.append(" AND ");
+                            }
+                            hasSortBy = true;
                         }
                     }
                     
@@ -627,8 +626,6 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                         for (String pk : lastPkColumnNames) {
                             if (!ids.contains(pk)) {
                                 getDataStore().dialect.encodeColumnName(null, pk, sortBySQL);
-                                /*if (i < lastPkColumnNames.size() - 1)
-                                    sortBySQL.append(",");*/
                                 sortBySQL.append(" FROM ");
                                 getDataStore().encodeTableName(lastTableName, sortBySQL, query.getHints());                                        
                                 sortBySQL.append(" ").append(toSQL.encodeToString(filter));
@@ -647,18 +644,19 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                         }  
                     }
                     if (hasSortBy) {
-                    	if(sortBySQL.toString().endsWith(" AND ")) {
-                    		sql.append(sortBySQL.substring(0, sortBySQL.length() - 5)).append(" ) ");
-                    	} else {
-                    		sql.append(sortBySQL).append(" ) ");
-                    	}
+                        if (sortBySQL.toString().endsWith(" AND ")) {
+                            sql.append(sortBySQL.substring(0, sortBySQL.length() - 5))
+                                    .append(" ) ");
+                        } else {
+                            sql.append(sortBySQL).append(" ) ");
+                        }
                     }
                 } else if (!pagingApplied) {
                     toSQL.setFieldEncoder(new JoiningFieldEncoder(curTypeName, getDataStore()));
-                    if(NestedFilterToSQL.isNestedFilter(filter)) {
-                   	 	sql.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
+                    if (NestedFilterToSQL.isNestedFilter(filter)) {
+                        sql.append(" WHERE ").append(createNestedFilter(filter, query, toSQL));
                     } else {
-                    	sql.append(" ").append(toSQL.encodeToString(filter));
+                        sql.append(" ").append(toSQL.encodeToString(filter));
                     }
                 }
             } catch (FilterToSQLException e) {
@@ -702,55 +700,6 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
         NestedFilterToSQL nested = new NestedFilterToSQL(query.getRootMapping(), filterToSQL);
         nested.setInline(true);
         return nested.encodeToString(filter);
-
-//        Class<? extends FilterToSQL> filterToSQLClass = filterToSQL.getClass();
-//
-//        // determine exact type of the dialect argument taken by FilterToSQL's constructor
-//        Constructor<?>[] constructors = filterToSQLClass.getConstructors();
-//        boolean hasNoArgConstructor = false;
-//        Class<? extends SQLDialect> dialectClass = null;
-//        for (Constructor<?> constructor : constructors) {
-//            Parameter[] parameters = constructor.getParameters();
-//            if (parameters.length == 0) {
-//                hasNoArgConstructor = true;
-//            } else if (parameters.length == 1) {
-//                Parameter arg = parameters[0];
-//                if (SQLDialect.class.isAssignableFrom(arg.getType())) {
-//                    dialectClass = (Class<? extends SQLDialect>) arg.getType();
-//                }
-//            }
-//        }
-//
-//        Enhancer enhancer = new Enhancer();
-//        enhancer.setSuperclass(filterToSQLClass);
-//        enhancer.setCallback(new NestedFilterToSQLProxy(query.getRootMapping()));
-//
-//        JDBCDataStore dataStore = (JDBCDataStore) query.getRootMapping().getSource().getDataStore();
-//        SQLDialect dialect = dataStore.dialect;
-//        FilterToSQL enhancedFilterToSQL = null;
-//        if (dialectClass != null && dialectClass.isAssignableFrom(dialect.getClass())) {
-//            // use constructor taking dialect as argument
-//            Class<?>[] argTypes = new Class[] { dialectClass };
-//            Object[] args = new Object[] { dialect };
-//            enhancedFilterToSQL = (FilterToSQL) enhancer.create(argTypes, args);
-//        } else if (hasNoArgConstructor) {
-//            // use no-arg constructor
-//            enhancedFilterToSQL = (FilterToSQL) enhancer.create();
-//        } else {
-//            // don't know how to proxy filterToSQL, unable to encode filter
-//            LOGGER.warning("Unable to encode nested filter: don't know how to proxy filterToSQL of type "
-//                    + filterToSQLClass.getName());
-//            return "";
-//        }
-//
-//        // copy state to proxied instance
-//        enhancedFilterToSQL.setFeatureType(filterToSQL.getFeatureType());
-//        enhancedFilterToSQL.setFieldEncoder(filterToSQL.getFieldEncoder());
-//        enhancedFilterToSQL.setSqlNameEscape(filterToSQL.getSqlNameEscape());
-//        enhancedFilterToSQL.setDatabaseSchema(filterToSQL.getDatabaseSchema());
-//        enhancedFilterToSQL.setInline(true);
-//
-//        return enhancedFilterToSQL.encodeToString(filter);
     }
 
     /**
@@ -819,8 +768,6 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
                         } else {
                             topIds.append(" ").append(filterToSQL.encodeToString(filter));
                         }
-                        
-                        //topIds.append(" ").append(filterToSQL.encodeToString(filter));
                     }
                     topIds.append(" ORDER BY ");
                     topIds.append(sortSQL);

@@ -2,7 +2,7 @@
  *    GeoTools - The Open Source Java GIS Toolkit
  *    http://geotools.org
  *
- *    (C) 2011-2016, Open Source Geospatial Foundation (OSGeo)
+ *    (C) 2011, Open Source Geospatial Foundation (OSGeo)
  *
  *    This library is free software; you can redistribute it and/or
  *    modify it under the terms of the GNU Lesser General Public
@@ -30,7 +30,6 @@ import org.geotools.data.complex.filter.FeatureChainedAttributeVisitor.FeatureCh
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.filter.FilterCapabilities;
 import org.geotools.filter.visitor.PostPreProcessFilterSplittingVisitor;
-import org.geotools.jdbc.JDBCDataStore;
 import org.geotools.util.logging.Logging;
 import org.opengis.filter.BinaryComparisonOperator;
 import org.opengis.filter.Id;
@@ -65,8 +64,6 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
     public class CapabilitiesExpressionVisitor implements ExpressionVisitor {
         
         protected boolean capable = true;
-        
-        
         
         public boolean isCapable(){
             return capable;
