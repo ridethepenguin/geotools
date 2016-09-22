@@ -694,7 +694,6 @@ public class JoiningJDBCFeatureSource extends JDBCFeatureSource {
         return sql.toString();
     }        
 
-    @SuppressWarnings("unchecked")
     private Object createNestedFilter(Filter filter, JoiningQuery query, FilterToSQL filterToSQL)
             throws FilterToSQLException {
         NestedFilterToSQL nested = new NestedFilterToSQL(query.getRootMapping(), filterToSQL);

@@ -287,8 +287,7 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
                     }
                     matchingMappings.addAll(nestedMappings);
 
-                    // also add source expressions for mappings used in join conditions, as they also
-                    // must be encoded
+                    // add source expressions for mappings used in join conditions, as they too must be encoded
                     for (int i = nestedAttrDescr.chainSize() - 2; i > 0; i--) {
                         FeatureChainLink mappingStep = nestedAttrDescr.getLink(i);
                         if (mappingStep.hasNestedFeature()) {

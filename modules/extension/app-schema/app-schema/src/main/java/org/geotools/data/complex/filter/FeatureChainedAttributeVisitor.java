@@ -134,7 +134,6 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
                         // property (e.g. see mappings doing chaining for gml:name)
                         if (xpathContainsNestedType || hasSimpleContent) {
                             LOGGER.finer("Nested feature type found: " + nestedTypeQName);
-                            // TODO: clone descriptor
                             FeatureChainedAttributeDescriptor copy = attrDescr.shallowCopy();
                             copy.addLink(new FeatureChainLink(currentType, nestedAttr));
 
@@ -188,7 +187,8 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
                             // abort search
                             return;
                         } else {
-                            FeatureTypeMapping nestedType = nestedAttr.getFeatureTypeMapping(feature);
+                            FeatureTypeMapping nestedType = nestedAttr
+                                    .getFeatureTypeMapping(feature);
                             if (nestedType != null) {
                                 FeatureChainLink lastLink = new FeatureChainLink(nestedType, true);
                                 attrDescr.addLink(lastLink);
@@ -430,7 +430,12 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
     }
 
     /**
-     * Represents a single step in the "chain" of feature types that need to be linked to go from the root type to a nested attribute.
+     * Represents a single link in the "chain" of feature types that need to be linked to go from the root type to a nested attribute.
+     * 
+     * <p>
+     * The class is <code>public</code> as its purpose is to convey information to clients, but instantiation and manipulation of its internal state
+     * is <code>private</code>.
+     * </p>
      * 
      * @author Stefano Costa, GeoSolutions
      *
@@ -475,44 +480,92 @@ public class FeatureChainedAttributeVisitor extends DefaultExpressionVisitor {
             this.chainingByReference = chainingByReference;
         }
 
+        /**
+         * Gets the mapping configuration of the linked feature type.
+         * 
+         * @return the linked feature type mapping
+         */
         public FeatureTypeMapping getFeatureTypeMapping() {
             return featureTypeMapping;
         }
 
+        /**
+         * Gets the mapping configuration of the attribute holding the next nested feature in the chain.
+         * 
+         * @return the nested attribute mapping, or <code>null</code> if there are no more nested features in the chain
+         */
         public NestedAttributeMapping getNestedFeatureAttribute() {
             return nestedFeatureAttribute;
         }
 
+        /**
+         * Gets the mapping configuration of the attribute holding the next nested feature in the chain, cast to the specified
+         * {@link NestedAttributeMapping} subclass.
+         * 
+         * @see #getNestedFeatureAttribute()
+         * @param attributeMappingClass the {@link NestedAttributeMapping} subclass to cast to
+         */
         public <T extends NestedAttributeMapping> T getNestedFeatureAttribute(
                 Class<T> attributeMappingClass) {
             return attributeMappingClass.cast(nestedFeatureAttribute);
         }
 
+        /**
+         * Returns <code>true</code> if this {@link FeatureChainLink} instance represents a chaining-by-reference mapping, i.e. nested feature is not
+         * fully encoded inline, only <code>xlink:href</code> attribute is set.
+         * 
+         * @return <code>true</code> if this is chaining by reference, <code>false</code> otherwise
+         */
         public boolean isChainingByReference() {
             return chainingByReference;
         }
 
+        /**
+         * Returns <code>true</code> if joining support is enabled for the nested attribute mapping.
+         * 
+         * @return <code>true</code> if joining support is enabled for this chain link, <code>false</code> otherwise
+         */
         public boolean isJoiningNestedMapping() {
             return nestedFeatureAttribute != null
                     && nestedFeatureAttribute instanceof JoiningNestedAttributeMapping;
         }
 
+        /**
+         * Returns <code>true</code> if this link refers to a nested feature type which in turn contains another nested feature.
+         * 
+         * @return <code>true</code> if there is another nested feature in the chain, <code>false</code> otherwise
+         */
         public boolean hasNestedFeature() {
             return nestedFeatureAttribute != null;
         }
 
+        /**
+         * Unique identifier of a link in the chain; mainly useful when SQL encoding the feature chained attribute.
+         * 
+         * @return a unique identifier of the link
+         */
         public String getAlias() {
             return alias;
         }
 
-        void setAlias(String alias) {
+        private void setAlias(String alias) {
             this.alias = alias;
         }
 
+        /**
+         * Returns the next link in the chain.
+         * 
+         * @return the next link, or <code>null</code> if none exists
+         */
         public FeatureChainLink next() {
             return nextStep;
         }
 
+        /**
+         * Returns the previous link in the chain.
+         * 
+         * @return the previous link, or <code>null</code> if none exists
+         */
         public FeatureChainLink previous() {
             return previousStep;
         }

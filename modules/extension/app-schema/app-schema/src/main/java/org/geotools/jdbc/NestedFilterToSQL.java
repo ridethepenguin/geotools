@@ -91,6 +91,12 @@ public class NestedFilterToSQL extends FilterToSQL {
     FilterToSQL original;
     FilterFactory ff;
 
+    /**
+     * Constructor.
+     * 
+     * @param rootMapping the feature type being queried
+     * @param original the wrapped filter-to-SQL encoder
+     */
     public NestedFilterToSQL(FeatureTypeMapping rootMapping, FilterToSQL original) {
         super();
         this.rootMapping = rootMapping;
