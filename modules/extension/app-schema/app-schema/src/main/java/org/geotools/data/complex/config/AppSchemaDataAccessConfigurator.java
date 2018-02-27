@@ -23,6 +23,7 @@ import java.io.Serializable;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,15 +52,23 @@ import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.FeatureTypeMappingFactory;
 import org.geotools.data.complex.NestedAttributeMapping;
 import org.geotools.data.complex.filter.XPath;
+import org.geotools.data.complex.filter.XPathUtil;
 import org.geotools.data.complex.filter.XPathUtil.Step;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.data.complex.spi.CustomImplementationsFinder;
 import org.geotools.data.complex.xml.XmlFeatureSource;
 import org.geotools.data.joining.JoiningNestedAttributeMapping;
 import org.geotools.factory.Hints;
+import org.geotools.feature.NameImpl;
+import org.geotools.feature.type.AttributeDescriptorImpl;
+import org.geotools.feature.type.ComplexFeatureTypeFactoryImpl;
+import org.geotools.feature.type.FeatureTypeFactoryImpl;
 import org.geotools.filter.AttributeExpressionImpl;
 import org.geotools.filter.FilterFactoryImplReportInvalidProperty;
 import org.geotools.filter.expression.FeaturePropertyAccessorFactory;
+import org.geotools.filter.expression.PropertyAccessor;
+import org.geotools.filter.expression.PropertyAccessorFactory;
+import org.geotools.filter.expression.PropertyAccessors;
 import org.geotools.filter.text.cql2.CQL;
 import org.geotools.filter.text.cql2.CQLException;
 import org.geotools.jdbc.JDBCFeatureSource;
@@ -73,7 +82,9 @@ import org.opengis.feature.Feature;
 import org.opengis.feature.type.AttributeDescriptor;
 import org.opengis.feature.type.AttributeType;
 import org.opengis.feature.type.FeatureType;
+import org.opengis.feature.type.GeometryDescriptor;
 import org.opengis.feature.type.Name;
+import org.opengis.feature.type.PropertyDescriptor;
 import org.opengis.filter.FilterFactory;
 import org.opengis.filter.expression.Expression;
 import org.opengis.referencing.crs.CoordinateReferenceSystem;
@@ -302,6 +313,19 @@ public class AppSchemaDataAccessConfigurator {
                 List attMappings = getAttributeMappings(target, dto.getAttributeMappings(), dto
                         .getItemXpath(), crs, isDatabaseBackend);
 
+                AttributeMapping defaultGeomMapping = null;
+                for (AttributeMapping attr: (List<AttributeMapping>)attMappings) {
+                    if (attr.getTargetXPath().toString().equals("st_gml32:location/st_gml32:position")) {
+                        defaultGeomMapping = new AttributeMapping(
+                                attr.getIdentifierExpression(),
+                                attr.getSourceExpression(),
+                                XPathUtil.steps(target, "DEFAULT_GEOMETRY", namespaces));
+                    }
+                }
+                if (defaultGeomMapping != null) {
+                    attMappings.add(defaultGeomMapping);
+                }
+                
                 FeatureTypeMapping mapping;
 
                 mapping = FeatureTypeMappingFactory.getInstance(featureSource, target, attMappings,
@@ -332,6 +356,54 @@ public class AppSchemaDataAccessConfigurator {
             throw new NoSuchElementException("descriptor " + targetNodeName
                     + " not found in parsed schema");
         }
+        
+        FeatureType ft = (FeatureType) targetDescriptor.getType();
+        FeatureType schema = ft;
+
+        // TODO: check if default geometry was set in FeatureTypeMapping
+        if (ft.getGeometryDescriptor() == null) {
+            String defaultGeometryPath = "st_gml32:location/st_gml32:position";
+            // TODO: get default geometry mapping from ftMapping
+            Hints hints = new Hints(PropertyAccessorFactory.NAMESPACE_CONTEXT, namespaces);
+            List<PropertyAccessor> accessors = PropertyAccessors.findPropertyAccessors(ft,
+                    defaultGeometryPath, GeometryDescriptor.class, hints);
+
+            GeometryDescriptor geom = null;
+            if (accessors != null) {
+                for (PropertyAccessor accessor : accessors) {
+                    geom = accessor.get(ft, defaultGeometryPath, GeometryDescriptor.class);
+                    if (geom != null) {
+                        break;
+                    }
+                }
+            }
+
+            if (geom != null) {
+                // retype
+                FeatureTypeFactoryImpl ftf = new ComplexFeatureTypeFactoryImpl();
+
+                GeometryDescriptor newGeom = ftf.createGeometryDescriptor(geom.getType(),
+                        new NameImpl(namespaces.getURI("st_gml32"), "DEFAULT_GEOMETRY"),
+                        geom.getMinOccurs(), geom.getMaxOccurs(), geom.isNillable(),
+                        geom.getDefaultValue());
+                newGeom.getUserData().put("DEFAULT_GEOMETRY_XPATH", defaultGeometryPath);
+
+                Collection<PropertyDescriptor> descriptors = new HashSet<>(ft.getDescriptors());
+                descriptors.add(newGeom);
+
+                schema = ftf.createFeatureType(ft.getName(), descriptors, newGeom, ft.isAbstract(),
+                        ft.getRestrictions(), ft.getSuper(), ft.getDescription());
+                schema.getUserData().putAll(ft.getUserData());
+
+                AttributeDescriptor newDescriptor = new AttributeDescriptorImpl(schema,
+                        targetDescriptor.getName(), targetDescriptor.getMinOccurs(),
+                        targetDescriptor.getMaxOccurs(), targetDescriptor.isNillable(),
+                        targetDescriptor.getDefaultValue());
+                newDescriptor.getUserData().putAll(targetDescriptor.getUserData());
+                targetDescriptor = newDescriptor;
+            }
+        }
+        
         return targetDescriptor;
     }
 
