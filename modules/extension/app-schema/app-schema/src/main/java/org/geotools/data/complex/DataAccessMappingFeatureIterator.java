@@ -46,14 +46,19 @@ import org.geotools.data.complex.filter.XPathUtil.Step;
 import org.geotools.data.complex.filter.XPathUtil.StepList;
 import org.geotools.data.joining.JoiningNestedAttributeMapping;
 import org.geotools.data.joining.JoiningQuery;
+import org.geotools.factory.Hints;
 import org.geotools.feature.AppSchemaAttributeBuilder;
 import org.geotools.feature.ComplexAttributeImpl;
 import org.geotools.feature.FeatureCollection;
 import org.geotools.feature.FeatureImpl;
 import org.geotools.feature.FeatureIterator;
+import org.geotools.feature.GeometryAttributeImpl;
 import org.geotools.feature.NameImpl;
 import org.geotools.filter.AttributeExpressionImpl;
 import org.geotools.filter.FilterAttributeExtractor;
+import org.geotools.filter.expression.PropertyAccessor;
+import org.geotools.filter.expression.PropertyAccessorFactory;
+import org.geotools.filter.expression.PropertyAccessors;
 import org.geotools.gml2.bindings.GML2EncodingUtils;
 import org.geotools.jdbc.JDBCFeatureSource;
 import org.geotools.jdbc.JDBCFeatureStore;
@@ -1015,17 +1020,6 @@ public class DataAccessMappingFeatureIterator extends AbstractMappingFeatureIter
         builder.setDescriptor(targetFeature);
         Feature target = (Feature) builder.build(id);
 
-        // set default geometry attribute
-        // TODO: generalize this!
-//        StepList defaultGeomXPath = null;
-//        if (target.getType().getGeometryDescriptor() != null) {
-//            String xpath = (String) target.getType().getGeometryDescriptor().getUserData().get("DEFAULT_GEOMETRY_PATH");
-//            if (xpath != null && !xpath.isEmpty()) {
-//                target.setDefaultGeometryProperty((GeometryAttribute)target.getProperty(new NameImpl(xpath)));
-//                defaultGeomXPath = XPathUtil.steps(targetFeature, xpath, namespaces);
-//            }
-//        }
-        
         for (AttributeMapping attMapping : selectedMapping) {
             try {
                 if (skipTopElement(targetNodeName, attMapping, targetFeature.getType())) {
@@ -1060,20 +1054,6 @@ public class DataAccessMappingFeatureIterator extends AbstractMappingFeatureIter
                     for (Feature source : sources) {
                         setAttributeValue(target, null, source, attMapping, null, null, selectedProperties.get(attMapping));
                     }
-//                } else if (attMapping.getTargetXPath().toString().equals("DEFAULT_GEOMETRY")) {
-//                    String indexString = attMapping.getSourceIndex();
-//                    // if not specified, get the first row by default
-//                    int index = 0;
-//                    if (indexString != null) {
-//                        if (ComplexFeatureConstants.LAST_INDEX.equals(indexString)) {
-//                            index = sources.size() - 1;
-//                        } else {
-//                            index = Integer.parseInt(indexString);
-//                        }
-//                    }
-//                    setAttributeValue(target, null, sources.get(index), attMapping, null, null, selectedProperties.get(attMapping));
-//                    Object values = getValues(attMapping.isMultiValued(), attMapping.getSourceExpression(), sources.get(index));
-//                    target.getDefaultGeometryProperty().setValue(values);
                 } else {
                     String indexString = attMapping.getSourceIndex();
                     // if not specified, get the first row by default
@@ -1102,9 +1082,49 @@ public class DataAccessMappingFeatureIterator extends AbstractMappingFeatureIter
                         + attMapping.getTargetXPath(), e);
             }
         }
+
+        // set default geometry attribute
+        String defaultGeomXPath = mapping.getDefaultGeometryXPath();
+        if (defaultGeomXPath != null && !defaultGeomXPath.isEmpty()) {
+            GeometryDescriptor defaultGeomDescr = target.getType().getGeometryDescriptor();
+            if (defaultGeomDescr != null) {
+                GeometryAttribute geom = getDefaultGeometryAttribute(target, defaultGeomXPath);
+
+                if (geom != null) {
+                    if (geom.getValue() instanceof Collection) {
+                        throw new RuntimeException(
+                                "Error setting default geometry value: multiple values were found");
+                    }
+
+                    String geomName = Types.toPrefixedName(defaultGeomDescr.getName(), namespaces);
+                    StepList xpathDefaultGeom = XPath.steps(targetFeature, geomName, namespaces);
+                    xpathAttributeBuilder.set(target, xpathDefaultGeom, geom.getValue(), null, null,
+                            false, null);
+                }
+            }
+        }
+
         cleanEmptyElements(target);
         
         return target;
+    }
+
+    private GeometryAttribute getDefaultGeometryAttribute(Feature feature, String xpath) {
+        Hints hints = new Hints(PropertyAccessorFactory.NAMESPACE_CONTEXT, namespaces);
+        List<PropertyAccessor> accessors = PropertyAccessors.findPropertyAccessors(feature, xpath,
+                GeometryAttribute.class, hints);
+
+        GeometryAttribute geom = null;
+        if (accessors != null) {
+            for (PropertyAccessor accessor : accessors) {
+                geom = accessor.get(feature, xpath, GeometryAttribute.class);
+                if (geom != null) {
+                    break;
+                }
+            }
+        }
+
+        return geom;
     }
 
     /**

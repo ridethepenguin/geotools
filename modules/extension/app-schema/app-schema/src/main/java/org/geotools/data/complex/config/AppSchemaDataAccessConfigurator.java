@@ -48,6 +48,7 @@ import org.geotools.data.DataSourceException;
 import org.geotools.data.FeatureSource;
 import org.geotools.data.complex.AppSchemaDataAccessRegistry;
 import org.geotools.data.complex.AttributeMapping;
+import org.geotools.data.complex.ComplexFeatureConstants;
 import org.geotools.data.complex.FeatureTypeMapping;
 import org.geotools.data.complex.FeatureTypeMappingFactory;
 import org.geotools.data.complex.NestedAttributeMapping;
@@ -313,23 +314,11 @@ public class AppSchemaDataAccessConfigurator {
                 List attMappings = getAttributeMappings(target, dto.getAttributeMappings(), dto
                         .getItemXpath(), crs, isDatabaseBackend);
 
-                AttributeMapping defaultGeomMapping = null;
-                for (AttributeMapping attr: (List<AttributeMapping>)attMappings) {
-                    if (attr.getTargetXPath().toString().equals("st_gml32:location/st_gml32:position")) {
-                        defaultGeomMapping = new AttributeMapping(
-                                attr.getIdentifierExpression(),
-                                attr.getSourceExpression(),
-                                XPathUtil.steps(target, "DEFAULT_GEOMETRY", namespaces));
-                    }
-                }
-                if (defaultGeomMapping != null) {
-                    attMappings.add(defaultGeomMapping);
-                }
-                
                 FeatureTypeMapping mapping;
 
-                mapping = FeatureTypeMappingFactory.getInstance(featureSource, target, attMappings,
-                        namespaces, dto.getItemXpath(), dto.isXmlDataStore(), dto.isDenormalised());
+                mapping = FeatureTypeMappingFactory.getInstance(featureSource, target,
+                        dto.getDefaultGeometryXPath(), attMappings, namespaces, dto.getItemXpath(),
+                        dto.isXmlDataStore(), dto.isDenormalised());
 
                 String mappingName = dto.getMappingName();
                 if (mappingName != null) {
@@ -353,58 +342,73 @@ public class AppSchemaDataAccessConfigurator {
 
         AttributeDescriptor targetDescriptor = typeRegistry.getDescriptor(targetNodeName, crs);
         if (targetDescriptor == null) {
-            throw new NoSuchElementException("descriptor " + targetNodeName
-                    + " not found in parsed schema");
+            throw new NoSuchElementException(
+                    "descriptor " + targetNodeName + " not found in parsed schema");
         }
-        
-        FeatureType ft = (FeatureType) targetDescriptor.getType();
-        FeatureType schema = ft;
 
-        // TODO: check if default geometry was set in FeatureTypeMapping
-        if (ft.getGeometryDescriptor() == null) {
-            String defaultGeometryPath = "st_gml32:location/st_gml32:position";
-            // TODO: get default geometry mapping from ftMapping
-            Hints hints = new Hints(PropertyAccessorFactory.NAMESPACE_CONTEXT, namespaces);
-            List<PropertyAccessor> accessors = PropertyAccessors.findPropertyAccessors(ft,
-                    defaultGeometryPath, GeometryDescriptor.class, hints);
+        // TODO: what if a default geometry is already set?
+        // check if default geometry was set in FeatureTypeMapping
+        String defaultGeomXPath = dto.getDefaultGeometryXPath();
+        if (defaultGeomXPath != null && !defaultGeomXPath.isEmpty()) {
+            targetDescriptor = retypeAddingDefaultGeometry(targetDescriptor, defaultGeomXPath);
+        }
 
-            GeometryDescriptor geom = null;
-            if (accessors != null) {
-                for (PropertyAccessor accessor : accessors) {
-                    geom = accessor.get(ft, defaultGeometryPath, GeometryDescriptor.class);
-                    if (geom != null) {
-                        break;
-                    }
+        return targetDescriptor;
+    }
+
+    private AttributeDescriptor retypeAddingDefaultGeometry(AttributeDescriptor descriptor,
+            String defaultGeomXPath) {
+        AttributeDescriptor newDescriptor = descriptor;
+        FeatureType type = (FeatureType) descriptor.getType();
+
+        GeometryDescriptor geom = getDefaultGeometryDescriptor(type, defaultGeomXPath);
+        if (geom != null) {
+            FeatureTypeFactoryImpl ftf = new ComplexFeatureTypeFactoryImpl();
+
+            String defGeomNamespace = type.getName().getNamespaceURI();
+            String defGeomLocalName = ComplexFeatureConstants.DEFAULT_GEOMETRY_LOCAL_NAME;
+            GeometryDescriptor defGeom = ftf.createGeometryDescriptor(geom.getType(),
+                    new NameImpl(defGeomNamespace, defGeomLocalName), geom.getMinOccurs(),
+                    geom.getMaxOccurs(), geom.isNillable(), geom.getDefaultValue());
+            // newGeom.getUserData().put("DEFAULT_GEOMETRY_XPATH", defaultGeometryXPath);
+
+            Collection<PropertyDescriptor> descriptors = new HashSet<>(type.getDescriptors());
+            descriptors.add(defGeom);
+
+            FeatureType newType = ftf.createFeatureType(type.getName(), descriptors, defGeom,
+                    type.isAbstract(), type.getRestrictions(), type.getSuper(),
+                    type.getDescription());
+            newType.getUserData().putAll(type.getUserData());
+
+            newDescriptor = new AttributeDescriptorImpl(newType, descriptor.getName(),
+                    descriptor.getMinOccurs(), descriptor.getMaxOccurs(), descriptor.isNillable(),
+                    descriptor.getDefaultValue());
+            newDescriptor.getUserData().putAll(descriptor.getUserData());
+        } else {
+            LOGGER.warning(
+                    String.format("No geometry descriptor could be found for type %s and xpath %s",
+                            descriptor.getName().toString(), defaultGeomXPath));
+        }
+
+        return newDescriptor;
+    }
+
+    private GeometryDescriptor getDefaultGeometryDescriptor(FeatureType featureType, String xpath) {
+        Hints hints = new Hints(PropertyAccessorFactory.NAMESPACE_CONTEXT, namespaces);
+        List<PropertyAccessor> accessors = PropertyAccessors.findPropertyAccessors(featureType,
+                xpath, GeometryDescriptor.class, hints);
+
+        GeometryDescriptor geom = null;
+        if (accessors != null) {
+            for (PropertyAccessor accessor : accessors) {
+                geom = accessor.get(featureType, xpath, GeometryDescriptor.class);
+                if (geom != null) {
+                    break;
                 }
             }
-
-            if (geom != null) {
-                // retype
-                FeatureTypeFactoryImpl ftf = new ComplexFeatureTypeFactoryImpl();
-
-                GeometryDescriptor newGeom = ftf.createGeometryDescriptor(geom.getType(),
-                        new NameImpl(namespaces.getURI("st_gml32"), "DEFAULT_GEOMETRY"),
-                        geom.getMinOccurs(), geom.getMaxOccurs(), geom.isNillable(),
-                        geom.getDefaultValue());
-                newGeom.getUserData().put("DEFAULT_GEOMETRY_XPATH", defaultGeometryPath);
-
-                Collection<PropertyDescriptor> descriptors = new HashSet<>(ft.getDescriptors());
-                descriptors.add(newGeom);
-
-                schema = ftf.createFeatureType(ft.getName(), descriptors, newGeom, ft.isAbstract(),
-                        ft.getRestrictions(), ft.getSuper(), ft.getDescription());
-                schema.getUserData().putAll(ft.getUserData());
-
-                AttributeDescriptor newDescriptor = new AttributeDescriptorImpl(schema,
-                        targetDescriptor.getName(), targetDescriptor.getMinOccurs(),
-                        targetDescriptor.getMaxOccurs(), targetDescriptor.isNillable(),
-                        targetDescriptor.getDefaultValue());
-                newDescriptor.getUserData().putAll(targetDescriptor.getUserData());
-                targetDescriptor = newDescriptor;
-            }
         }
-        
-        return targetDescriptor;
+
+        return geom;
     }
 
     /**
