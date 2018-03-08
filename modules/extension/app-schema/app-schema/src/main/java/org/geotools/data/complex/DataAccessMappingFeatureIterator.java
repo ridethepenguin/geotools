@@ -56,6 +56,7 @@ import org.geotools.feature.GeometryAttributeImpl;
 import org.geotools.feature.NameImpl;
 import org.geotools.filter.AttributeExpressionImpl;
 import org.geotools.filter.FilterAttributeExtractor;
+import org.geotools.filter.expression.FeaturePropertyAccessorFactory;
 import org.geotools.filter.expression.PropertyAccessor;
 import org.geotools.filter.expression.PropertyAccessorFactory;
 import org.geotools.filter.expression.PropertyAccessors;
@@ -1083,44 +1084,56 @@ public class DataAccessMappingFeatureIterator extends AbstractMappingFeatureIter
             }
         }
 
-        // set default geometry attribute
+        // if a default geometry attribute was configured in the mapping, set its value
+        setDefaultGeometryAttribute(target);
+
+        cleanEmptyElements(target);
+
+        return target;
+    }
+
+    private void setDefaultGeometryAttribute(Feature feature) {
         String defaultGeomXPath = mapping.getDefaultGeometryXPath();
         if (defaultGeomXPath != null && !defaultGeomXPath.isEmpty()) {
-            GeometryDescriptor defaultGeomDescr = target.getType().getGeometryDescriptor();
+            GeometryDescriptor defaultGeomDescr = feature.getType().getGeometryDescriptor();
             if (defaultGeomDescr != null) {
-                GeometryAttribute geom = getDefaultGeometryAttribute(target, defaultGeomXPath);
-
+                GeometryAttribute geom = getDefaultGeometryAttribute(feature, defaultGeomXPath);
+                if (geom == null) {
+                    LOGGER.finer(String.format("Default geometry attribute not found at x-path \"%s\", "
+                            + "default geometry will be null", defaultGeomXPath));
+                }
+                Object geomValue = null;
                 if (geom != null) {
                     if (geom.getValue() instanceof Collection) {
                         throw new RuntimeException(
                                 "Error setting default geometry value: multiple values were found");
                     }
-
-                    String geomName = Types.toPrefixedName(defaultGeomDescr.getName(), namespaces);
-                    StepList xpathDefaultGeom = XPath.steps(targetFeature, geomName, namespaces);
-                    xpathAttributeBuilder.set(target, xpathDefaultGeom, geom.getValue(), null, null,
-                            false, null);
+                    geomValue = geom.getValue();
                 }
+
+                String geomName = Types.toPrefixedName(defaultGeomDescr.getName(), namespaces);
+                StepList fakeDefaultGeomXPath = XPath.steps(targetFeature, geomName, namespaces);
+                xpathAttributeBuilder.set(feature, fakeDefaultGeomXPath, geomValue, null, null,
+                        false, null);
             }
         }
-
-        cleanEmptyElements(target);
-        
-        return target;
     }
 
     private GeometryAttribute getDefaultGeometryAttribute(Feature feature, String xpath) {
+        // directly instantiating the factory I need instead of scanning the registry improves perf.
+        FeaturePropertyAccessorFactory accessorFactory = new FeaturePropertyAccessorFactory();
         Hints hints = new Hints(PropertyAccessorFactory.NAMESPACE_CONTEXT, namespaces);
-        List<PropertyAccessor> accessors = PropertyAccessors.findPropertyAccessors(feature, xpath,
-                GeometryAttribute.class, hints);
+        PropertyAccessor accessor = accessorFactory.createPropertyAccessor(feature.getClass(),
+                xpath, GeometryAttribute.class, hints);
 
         GeometryAttribute geom = null;
-        if (accessors != null) {
-            for (PropertyAccessor accessor : accessors) {
+        if (accessor != null) {
+            try {
                 geom = accessor.get(feature, xpath, GeometryAttribute.class);
-                if (geom != null) {
-                    break;
-                }
+            } catch (Exception e) {
+                LOGGER.finest(
+                        String.format("Exception occurred retrieving geometry attribute "
+                                + "at x-path \"%s\": %s", xpath, e.getMessage()));
             }
         }
 

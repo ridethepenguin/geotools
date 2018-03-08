@@ -253,6 +253,13 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
     }
 
     public Object visit(PropertyName expression, Object notUsed) {
+
+        // replace the artificial DEFAULT_GEOMETRY property with the actual one
+        if (DEFAULT_GEOMETRY_LOCAL_NAME.equals(expression.getPropertyName())) {
+            String defGeomPath = mappings.getDefaultGeometryXPath();
+            FilterFactory2 ff = new FilterFactoryImplNamespaceAware(mappings.getNamespaces());
+            expression = ff.property(defGeomPath);
+        }
         
         // break into single steps
         StepList exprSteps = XPath.steps(mappings.getTargetFeature(), expression.getPropertyName(), this.mappings.getNamespaces());
@@ -260,13 +267,6 @@ public class ComplexFilterSplitter extends PostPreProcessFilterSplittingVisitor 
         if (exprSteps.containsPredicate()) {
             postStack.push(expression);
             return null;
-        }
-
-        // replace the artificial DEFAULT_GEOMETRY property with the actual one
-        if (DEFAULT_GEOMETRY_LOCAL_NAME.equals(expression.getPropertyName())) {
-            String defGeomPath = mappings.getDefaultGeometryXPath();
-            FilterFactory2 ff = new FilterFactoryImplNamespaceAware(mappings.getNamespaces());
-            expression = ff.property(defGeomPath);
         }
 
         List<Expression> matchingMappings = mappings.findMappingsFor(exprSteps, false);

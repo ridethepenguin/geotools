@@ -80,6 +80,7 @@ import org.geotools.xml.resolver.SchemaCache;
 import org.geotools.xml.resolver.SchemaCatalog;
 import org.geotools.xml.resolver.SchemaResolver;
 import org.opengis.feature.Feature;
+import org.opengis.feature.GeometryAttribute;
 import org.opengis.feature.type.AttributeDescriptor;
 import org.opengis.feature.type.AttributeType;
 import org.opengis.feature.type.FeatureType;
@@ -385,26 +386,30 @@ public class AppSchemaDataAccessConfigurator {
                     descriptor.getDefaultValue());
             newDescriptor.getUserData().putAll(descriptor.getUserData());
         } else {
-            LOGGER.warning(
-                    String.format("No geometry descriptor could be found for type %s and xpath %s",
-                            descriptor.getName().toString(), defaultGeomXPath));
+            LOGGER.warning(String.format(
+                    "Default geometry descriptor could not be found for type \"%s\" at xpath \"%s\","
+                            + " default geometry attribute will not be created",
+                    descriptor.getName().toString(), defaultGeomXPath));
         }
 
         return newDescriptor;
     }
 
     private GeometryDescriptor getDefaultGeometryDescriptor(FeatureType featureType, String xpath) {
+        // directly instantiating the factory I need instead of scanning the registry improves perf.
+        FeaturePropertyAccessorFactory accessorFactory = new FeaturePropertyAccessorFactory();
         Hints hints = new Hints(PropertyAccessorFactory.NAMESPACE_CONTEXT, namespaces);
-        List<PropertyAccessor> accessors = PropertyAccessors.findPropertyAccessors(featureType,
-                xpath, GeometryDescriptor.class, hints);
+        PropertyAccessor accessor = accessorFactory.createPropertyAccessor(featureType.getClass(),
+                xpath, GeometryAttribute.class, hints);
 
         GeometryDescriptor geom = null;
-        if (accessors != null) {
-            for (PropertyAccessor accessor : accessors) {
+        if (accessor != null) {
+            try {
                 geom = accessor.get(featureType, xpath, GeometryDescriptor.class);
-                if (geom != null) {
-                    break;
-                }
+            } catch (Exception e) {
+                LOGGER.finest(
+                        String.format("Exception occurred retrieving geometry descriptor "
+                                + "at x-path \"%s\": %s", xpath, e.getMessage()));
             }
         }
 
