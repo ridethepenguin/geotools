@@ -8,7 +8,7 @@
     </namespaces>
     <sourceDataStores>
         <DataStore>
-            <id>stations</id>
+            <id>stationsDefaultGeometry</id>
             <parameters>
                 <Parameter>
                     <name>directory</name>
@@ -19,19 +19,20 @@
     </sourceDataStores>
     <targetTypes>
         <FeatureType>
-            <schemaUri>stations.xsd</schemaUri>
+            <schemaUri>stationsDefaultGeometry.xsd</schemaUri>
         </FeatureType>
     </targetTypes>
     <typeMappings>
         <FeatureTypeMapping>
-            <sourceDataStore>stations</sourceDataStore>
-            <sourceType>stations</sourceType>
+            <sourceDataStore>stationsDefaultGeometry</sourceDataStore>
+            <sourceType>stationsDefaultGeometry</sourceType>
             <targetElement>st:Station</targetElement>
+            <defaultGeometry>st:location/st:name</defaultGeometry>
             <attributeMappings>
                 <AttributeMapping>
                     <targetAttribute>st:Station</targetAttribute>
                     <idExpression>
-                        <OCQL>strConcat('station.', ID)</OCQL>
+                        <OCQL>ID</OCQL>
                     </idExpression>
                 </AttributeMapping>
                 <AttributeMapping>
@@ -49,7 +50,7 @@
                 <AttributeMapping>
                     <targetAttribute>st:location/st:position</targetAttribute>
                     <sourceExpression>
-                        <OCQL>POSITION</OCQL>
+                        <OCQL>ST_POSITION</OCQL>
                     </sourceExpression>
                 </AttributeMapping>
             </attributeMappings>

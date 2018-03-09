@@ -347,8 +347,8 @@ public class AppSchemaDataAccessConfigurator {
                     "descriptor " + targetNodeName + " not found in parsed schema");
         }
 
-        // TODO: what if a default geometry is already set?
         // check if default geometry was set in FeatureTypeMapping
+        // NOTE: if a default geometry is already set, it will be overridden
         String defaultGeomXPath = dto.getDefaultGeometryXPath();
         if (defaultGeomXPath != null && !defaultGeomXPath.isEmpty()) {
             targetDescriptor = retypeAddingDefaultGeometry(targetDescriptor, defaultGeomXPath);
@@ -386,9 +386,8 @@ public class AppSchemaDataAccessConfigurator {
                     descriptor.getDefaultValue());
             newDescriptor.getUserData().putAll(descriptor.getUserData());
         } else {
-            LOGGER.warning(String.format(
-                    "Default geometry descriptor could not be found for type \"%s\" at xpath \"%s\","
-                            + " default geometry attribute will not be created",
+            throw new IllegalArgumentException(String.format(
+                    "Default geometry descriptor could not be found for type \"%s\" at x-path \"%s\"",
                     descriptor.getName().toString(), defaultGeomXPath));
         }
 
