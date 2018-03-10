@@ -1097,18 +1097,11 @@ public class DataAccessMappingFeatureIterator extends AbstractMappingFeatureIter
         if (defaultGeomXPath != null && !defaultGeomXPath.isEmpty()) {
             GeometryDescriptor defaultGeomDescr = feature.getType().getGeometryDescriptor();
             if (defaultGeomDescr != null) {
-                GeometryAttribute geom = getDefaultGeometryAttribute(feature, defaultGeomXPath);
-                if (geom == null) {
-                    LOGGER.finer(String.format("Default geometry attribute not found at x-path \"%s\", "
-                            + "default geometry will be null", defaultGeomXPath));
-                }
-                Object geomValue = null;
-                if (geom != null) {
-                    if (geom.getValue() instanceof Collection) {
-                        throw new RuntimeException(
-                                "Error setting default geometry value: multiple values were found");
-                    }
-                    geomValue = geom.getValue();
+                PropertyName geomProperty = filterFac.property(defaultGeomXPath, namespaces);
+                Object geomValue = geomProperty.evaluate(feature);
+                if (geomValue instanceof Collection) {
+                    throw new RuntimeException(
+                            "Error setting default geometry value: multiple values were found");
                 }
 
                 String geomName = Types.toPrefixedName(defaultGeomDescr.getName(), namespaces);

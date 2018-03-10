@@ -419,8 +419,8 @@ public class FeatureTypeMapping {
      * 
      * <p>
      * The specified geometry property may be a direct child of the target feature type, or may be
-     * nested inside another property. If the evaluation of the provided expression yields something
-     * other than a geometry attribute, an exception will be thrown.
+     * nested inside another property. If the evaluation of the provided expression yields multiple
+     * values, an exception will be thrown at runtime.
      * </p>
      * 
      * @param defaultGeometryXPath XPath expression identifying the default geometry property

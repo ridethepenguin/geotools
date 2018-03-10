@@ -290,7 +290,7 @@ public class DefaultGeometryTest {
     public void testDefaultGeometryWrongType() {
         try {
             // try to load data access with faulty configuration --> exception should be thrown
-            loadDataAccess("stationsWrongDefaultGeometry.xml");
+            loadDataAccess("stationsDefaultGeometryWrongType.xml");
             fail("Expected exception to be thrown");
         } catch (IOException ex) {
             assertTrue(ex.getCause() instanceof IllegalArgumentException);
@@ -298,6 +298,28 @@ public class DefaultGeometryTest {
             // check error message
             assertEquals("Default geometry descriptor could not be found for type "
                     + "\"http://www.stations.org/1.0:Station\" at x-path \"st:location/st:name\"",
+                    iae.getMessage());
+        } catch (Exception e) {
+            fail("Expected IllegalArgumentException to be thrown, but " + e.getClass().getName()
+                    + " was thrown instead");
+        }
+    }
+
+    /**
+     * Tests that an exception is thrown at runtime if the default geometry expression addresses a non-existent property.
+     */
+    @Test
+    public void testDefaultGeometryNonExistentProperty() {
+        try {
+            // try to load data access with faulty configuration --> exception should be thrown
+            loadDataAccess("stationsDefaultGeometryNonExistentProperty.xml");
+            fail("Expected exception to be thrown");
+        } catch (IOException ex) {
+            assertTrue(ex.getCause() instanceof IllegalArgumentException);
+            IllegalArgumentException iae = (IllegalArgumentException) ex.getCause();
+            // check error message
+            assertEquals("Default geometry descriptor could not be found for type "
+                    + "\"http://www.stations.org/1.0:Station\" at x-path \"st:location/st:notThere\"",
                     iae.getMessage());
         } catch (Exception e) {
             fail("Expected IllegalArgumentException to be thrown, but " + e.getClass().getName()
@@ -316,9 +338,17 @@ public class DefaultGeometryTest {
         FeatureSource fs = stationsDataAccess.getFeatureSource(STATION_MULTIPLE_GEOM_MAPPING);
         FeatureCollection fc = fs.getFeatures();
         try (FeatureIterator it = fc.features()) {
-            Feature stations1 = it.next();
-            assertNotNull(stations1.getDefaultGeometryProperty());
-            assertNull(stations1.getDefaultGeometryProperty().getValue());
+            try {
+                it.next();
+            } catch (Exception ex) {
+                assertNotNull(ex.getCause());
+                assertTrue("Expected RuntimeException to be thrown",
+                        ex.getCause() instanceof RuntimeException);
+                // check error message
+                RuntimeException re = (RuntimeException) ex.getCause();
+                assertEquals("Error setting default geometry value: multiple values were found",
+                        re.getMessage());
+            }
         }
     }
 }

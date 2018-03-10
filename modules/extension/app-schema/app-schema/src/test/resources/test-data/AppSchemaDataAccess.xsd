@@ -234,8 +234,10 @@
                     multiple geometry properties are present.
                     
                     The specified geometry property may be a direct child of the target feature type, or may be
-                    nested inside another property. If the evaluation of the provided expression yields something
-                    other than a geometry attribute, an exception will be thrown.
+                    nested inside another property. If the evaluation of the provided expression yields multiple
+                    values, an exception will be thrown at runtime. If the provided expression targets
+                    a property whose type is not a geometry type, an exception will be thrown during
+                    the creation of the app-schema data store.
                 </documentation>
               </annotation>
             </element>
