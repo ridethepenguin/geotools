@@ -570,8 +570,10 @@ public class XPathUtil {
         if (prefixIdx == -1) {
             localName = prefixedName;
             final Name rootName = root.getName();
-            // don't use default namespace for client properties (xml attribute), and FEATURE_LINK
+            // don't use default namespace for client properties (xml attribute),
+            // FEATURE_LINK and __DEFAULT_GEOMETRY__
             final String defaultNamespace = (isXmlAttribute
+                    || localName.equals(ComplexFeatureConstants.DEFAULT_GEOMETRY_LOCAL_NAME)
                     || localName.equals(ComplexFeatureConstants.FEATURE_CHAINING_LINK_NAME
                             .getLocalPart()) || rootName.getNamespaceURI() == null) ? XMLConstants.NULL_NS_URI
                     : namespaces.getURI("") == null ? rootName.getNamespaceURI() : namespaces

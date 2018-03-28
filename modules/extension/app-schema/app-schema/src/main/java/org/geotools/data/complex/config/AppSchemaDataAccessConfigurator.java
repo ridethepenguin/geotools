@@ -366,10 +366,9 @@ public class AppSchemaDataAccessConfigurator {
         if (geom != null) {
             FeatureTypeFactoryImpl ftf = new ComplexFeatureTypeFactoryImpl();
 
-            String defGeomNamespace = type.getName().getNamespaceURI();
             String defGeomLocalName = ComplexFeatureConstants.DEFAULT_GEOMETRY_LOCAL_NAME;
             GeometryDescriptor defGeom = ftf.createGeometryDescriptor(geom.getType(),
-                    new NameImpl(defGeomNamespace, defGeomLocalName), geom.getMinOccurs(),
+                    new NameImpl(defGeomLocalName), geom.getMinOccurs(),
                     geom.getMaxOccurs(), geom.isNillable(), geom.getDefaultValue());
 
             Collection<PropertyDescriptor> descriptors = new HashSet<>(type.getDescriptors());

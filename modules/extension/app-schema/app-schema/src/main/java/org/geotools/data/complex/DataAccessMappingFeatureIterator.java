@@ -1095,8 +1095,7 @@ public class DataAccessMappingFeatureIterator extends AbstractMappingFeatureIter
                             "Error setting default geometry value: multiple values were found");
                 }
 
-                String geomName = Types.toPrefixedName(defaultGeomDescr.getName(), namespaces);
-                StepList fakeDefaultGeomXPath = XPath.steps(targetFeature, geomName, namespaces);
+                StepList fakeDefaultGeomXPath = XPath.steps(targetFeature, ComplexFeatureConstants.DEFAULT_GEOMETRY_LOCAL_NAME, namespaces);
                 xpathAttributeBuilder.set(feature, fakeDefaultGeomXPath, geomValue, null, null,
                         false, null);
             }

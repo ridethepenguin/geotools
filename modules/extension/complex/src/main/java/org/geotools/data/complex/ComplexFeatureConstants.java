@@ -54,11 +54,10 @@ public class ComplexFeatureConstants {
 
     /**
      * Static attribute name used for the auxiliary default geometry attribute, which is created when
-     * &lt;defaultGeometry&gt; is specified in the feature type mapping configuration.
+     * &lt;defaultGeometry&gt; is specified in the feature type mapping configuration. The attribute
+     * name is unqualified (i.e. has no namespace URI).
      * 
-     * The constant represents to the local part of the qualified attribute name; the namespace URI
-     * is generated at runtime and will be the same as the namespace URI of the feature containing
-     * the geometry attribute.
+     * This attribute won't appear in the output document as it doesn't exist in the schema.
      */
     public static final String DEFAULT_GEOMETRY_LOCAL_NAME = "__DEFAULT_GEOMETRY__";
 
